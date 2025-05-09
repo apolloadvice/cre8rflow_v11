@@ -16,12 +16,6 @@ INTENT_TEST_CASES = [
     ("Make it sparkle!", "UNKNOWN"),
     ("Cutt clip1 at 00:30", "UNKNOWN"),  # typo/ambiguous
     ("Addd text 'Intro' at the top from 0:05 to 0:15", "UNKNOWN"),  # typo/ambiguous
-    # Synonym cases for CUT
-    ("Split clip1 at 00:30", "CUT"),
-    ("Divide clip1 at 00:30", "CUT"),
-    ("Slice clip1 at 00:30", "CUT"),
-    # Edge/failure case
-    ("Split at 00:30", "CUT"),  # Should be CUT but will fail validation due to missing target
 ]
 
 

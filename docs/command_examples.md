@@ -14,9 +14,6 @@ This dataset provides example natural language commands, their intent categories
 | Apply color correction to clip3 | Color Correction | {"type": "COLOR_CORRECTION", "target": "clip3"}} |
 | Export the project as mp4 | Export | {"type": "EXPORT", "parameters": {"format": "mp4"}} |
 | Reverse clip4 | Reverse | {"type": "REVERSE", "target": "clip4"}} |
-| Split clip1 at 00:30 | Cut | {"type": "CUT", "target": "clip1", "parameters": {"timestamp": "00:30"}} |
-| Divide clip1 at 00:30 | Cut | {"type": "CUT", "target": "clip1", "parameters": {"timestamp": "00:30"}} |
-| Slice clip1 at 00:30 | Cut | {"type": "CUT", "target": "clip1", "parameters": {"timestamp": "00:30"}} |
 
 ---
 

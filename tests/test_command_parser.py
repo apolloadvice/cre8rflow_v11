@@ -500,21 +500,3 @@ def test_group_cut_command_effect(parser):
     assert op.type == "CUT_GROUP"
     assert op.parameters["track_type"] == "effect"
     assert op.parameters["timestamp"] == "00:15"
-
-def test_cut_command_synonyms(parser):
-    # Synonyms for 'cut' should be recognized and parsed as CUT
-    for synonym in ["split", "divide", "slice"]:
-        cmd = f"{synonym.capitalize()} clip1 at 00:30"
-        op = parser.parse_command(cmd)
-        assert op.type == "CUT", f"Failed to parse {cmd} as CUT"
-        assert op.target == "clip1"
-        assert op.parameters["timestamp"] == "00:30"
-        # Intent recognition
-        assert parser.recognize_intent(cmd) == "CUT"
-    # Edge/failure case: malformed usage
-    op = parser.parse_command("split at 00:30")
-    assert op.type == "CUT"
-    assert op.target is None
-    assert op.parameters["timestamp"] == "00:30"
-    valid, msg = parser.validate_command(op)
-    assert not valid and "target clip name" in msg

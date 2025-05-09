@@ -1,0 +1,16 @@
+{
+  "name": "cre8rflow_v11",
+  "version": "1.0.0",
+  "description": "This project is an NLP-based video editing tool that allows users to edit videos on a timeline using natural language commands.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

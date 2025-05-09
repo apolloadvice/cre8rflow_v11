@@ -24,7 +24,6 @@ This document describes the structure of natural language commands supported by 
 
 ### 1. Clip Manipulation
 - **Cut**: `Cut clip1 at 00:30`
-  - Synonyms: `Split clip1 at 00:30`, `Divide clip1 at 00:30`, `Slice clip1 at 00:30`
 - **Trim**: `Trim the start of clip2 to 00:10`
 - **Join**: `Join clip1 and clip2 with a crossfade`
 
@@ -51,8 +50,6 @@ This document describes the structure of natural language commands supported by 
 ---
 
 ## Notes
-- **Synonyms**: The following synonyms are supported for commands:
-  - **Cut**: `split`, `divide`, `slice`
 - **Timestamps**: Use `mm:ss` or seconds (e.g., `1:30` or `90s`).
 - **Clip names**: Should be unique and alphanumeric (e.g., `clip1`, `intro_clip`).
 - **Text**: Enclose in single or double quotes.

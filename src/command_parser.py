@@ -20,20 +20,6 @@ class CommandParser:
     - Parameters (timestamps, speeds, etc.)
     - Modifiers (transitions, effects)
     """
-    # Synonym mapping for extensibility
-    INTENT_SYNONYMS = {
-        "CUT": ["cut", "split", "divide", "slice"],
-        "TRIM": ["trim"],
-        "JOIN": ["join"],
-        "ADD_TEXT": ["add text"],
-        "OVERLAY": ["overlay"],
-        "FADE": ["fade"],
-        "SPEED": ["speed up", "slow down"],
-        "REVERSE": ["reverse"],
-        "COLOR_CORRECTION": ["color correction"],
-        "EXPORT": ["export"],
-    }
-
     def __init__(self):
         """
         Initialize the parser with spaCy and any custom resources.
@@ -98,7 +84,7 @@ class CommandParser:
 
     def recognize_intent(self, command_text: str) -> str:
         """
-        Recognize the intent of a command using regex patterns and synonyms.
+        Recognize the intent of a command using regex patterns.
 
         Args:
             command_text (str): The natural language command
@@ -106,17 +92,21 @@ class CommandParser:
         Returns:
             str: The detected intent (e.g., 'CUT', 'TRIM', 'JOIN', etc.), or 'UNKNOWN'
         """
-        for intent, synonyms in self.INTENT_SYNONYMS.items():
-            for synonym in synonyms:
-                # For multi-word synonyms, require word boundary or start
-                if re.search(rf"\\b{re.escape(synonym)}\\b", command_text, re.I):
-                    # Special case: 'fade' must be followed by 'in' or 'out' for FADE
-                    if intent == "FADE" and not re.search(r"fade (in|out)", command_text, re.I):
-                        continue
-                    # Special case: 'add text' must match as a phrase
-                    if intent == "ADD_TEXT" and not re.search(r"add text ", command_text, re.I):
-                        continue
-                    return intent
+        patterns = [
+            (r"cut ", "CUT"),
+            (r"trim ", "TRIM"),
+            (r"join ", "JOIN"),
+            (r"add text ", "ADD_TEXT"),
+            (r"overlay ", "OVERLAY"),
+            (r"fade (in|out)", "FADE"),
+            (r"speed up|slow down", "SPEED"),
+            (r"reverse ", "REVERSE"),
+            (r"apply .*color correction", "COLOR_CORRECTION"),
+            (r"export ", "EXPORT"),
+        ]
+        for pattern, intent in patterns:
+            if re.search(pattern, command_text, re.I):
+                return intent
         return "UNKNOWN"
 
     def extract_entities(self, command_text: str) -> Dict[str, Any]:

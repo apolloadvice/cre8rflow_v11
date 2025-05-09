@@ -8,17 +8,17 @@ ORDINALS = [
 ordinal_pattern = r"(?P<ordinal>(" + "|".join(ORDINALS) + r"|\d+(st|nd|rd|th)))"
 target_pattern = rf"(?:the )?(?P<target>(last clip|first clip|clip named [\w_\-]+|clip\w+|audio\w+|subtitle\w+|effect\w+|{ordinal_pattern}(?: (?P<ref_track_type>video|audio|subtitle|effect))? clip))"
 
-class CutCommandHandler(BaseCommandHandler):
+class TrimCommandHandler(BaseCommandHandler):
     def match(self, command_text: str) -> bool:
-        cut_pattern = re.compile(rf"cut(?! all)(?:\s+{target_pattern})?(?: at (?P<timestamp>\d{{1,2}}:\d{{2}}))?", re.I)
-        return bool(cut_pattern.match(command_text))
+        trim_pattern = re.compile(rf"trim(?: (?:the )?(?:start of )?)?(?:the )?{target_pattern}?(?: (?:to|at) (?P<timestamp>\d{{1,2}}:\d{{2}}|\d+))?", re.I)
+        return bool(trim_pattern.match(command_text))
 
     def parse(self, command_text: str) -> EditOperation:
-        cut_pattern = re.compile(rf"cut(?! all)(?:\s+{target_pattern})?(?: at (?P<timestamp>\d{{1,2}}:\d{{2}}))?", re.I)
-        cut_match = cut_pattern.match(command_text)
-        if cut_match:
-            target = cut_match.group("target") if cut_match.group("target") and cut_match.group("target").lower() != "at" else None
-            timestamp = cut_match.group("timestamp") if cut_match.group("timestamp") else None
+        trim_pattern = re.compile(rf"trim(?: (?:the )?(?:start of )?)?(?:the )?{target_pattern}?(?: (?:to|at) (?P<timestamp>\d{{1,2}}:\d{{2}}|\d+))?", re.I)
+        trim_match = trim_pattern.match(command_text)
+        if trim_match:
+            target = trim_match.group("target")
+            timestamp = trim_match.group("timestamp")
             params = {}
             reference_type = None
             if target:
@@ -27,12 +27,12 @@ class CutCommandHandler(BaseCommandHandler):
                     reference_type = "positional"
                 elif t.startswith("clip named"):
                     reference_type = "named"
-                elif cut_match.group("ordinal"):
+                elif trim_match.group("ordinal"):
                     reference_type = "ordinal"
-                    params["ordinal"] = cut_match.group("ordinal")
-                    if cut_match.group("ref_track_type"):
-                        params["ref_track_type"] = cut_match.group("ref_track_type")
-                        params["track_type"] = cut_match.group("ref_track_type")
+                    params["ordinal"] = trim_match.group("ordinal")
+                    if trim_match.group("ref_track_type"):
+                        params["ref_track_type"] = trim_match.group("ref_track_type")
+                        params["track_type"] = trim_match.group("ref_track_type")
             if timestamp:
                 params["timestamp"] = timestamp
             # Infer track_type from target name
@@ -45,5 +45,5 @@ class CutCommandHandler(BaseCommandHandler):
                     params["track_type"] = "effect"
             if reference_type:
                 params["reference_type"] = reference_type
-            return EditOperation(type_="CUT", target=target, parameters=params)
+            return EditOperation(type_="TRIM", target=target, parameters=params)
         return EditOperation(type_="UNKNOWN", parameters={"raw": command_text}) 
