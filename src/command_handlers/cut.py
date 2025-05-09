@@ -1,29 +1,57 @@
 import re
 from src.command_handlers.base import BaseCommandHandler
 from src.command_types import EditOperation
+from src.utils import timestamp_to_frames
 
 ORDINALS = [
     "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"
 ]
 ordinal_pattern = r"(?P<ordinal>(" + "|".join(ORDINALS) + r"|\d+(st|nd|rd|th)))"
-target_pattern = rf"(?:the )?(?P<target>(last clip|first clip|clip named [\w_\-]+|clip\w+|audio\w+|subtitle\w+|effect\w+|{ordinal_pattern}(?: (?P<ref_track_type>video|audio|subtitle|effect))? clip))"
+natural_reference_pattern = r"this clip|the clip before that one|the clip after that one|the clip that starts at (?P<start_time>\d{1,2}:\d{2}|\d+)"
+
+# Add pronoun support for context awareness
+def _contextual_pronoun_pattern():
+    return r"(?P<target_pronoun>it|that|this)"
+
+# Update full_target_pattern to include pronouns
+full_target_pattern = rf"(?:the )?(?P<target>(last clip|first clip|clip named [\w_\-]+|clip\w+|audio\w+|subtitle\w+|effect\w+|{ordinal_pattern}(?: (?P<ref_track_type>video|audio|subtitle|effect))? clip|{natural_reference_pattern}|{_contextual_pronoun_pattern()}))"
 
 class CutCommandHandler(BaseCommandHandler):
     def match(self, command_text: str) -> bool:
-        cut_pattern = re.compile(rf"cut(?! all)(?:\s+{target_pattern})?(?: at (?P<timestamp>\d{{1,2}}:\d{{2}}))?", re.I)
+        cut_synonyms = r"cut|split|divide|slice"
+        cut_pattern = re.compile(
+            rf"^(?P<verb>{cut_synonyms})(?:\s+{full_target_pattern})?(?:\s+at\s+(?P<timestamp>\d{{1,2}}:\d{{2}}))?$",
+            re.I
+        )
         return bool(cut_pattern.match(command_text))
 
     def parse(self, command_text: str) -> EditOperation:
-        cut_pattern = re.compile(rf"cut(?! all)(?:\s+{target_pattern})?(?: at (?P<timestamp>\d{{1,2}}:\d{{2}}))?", re.I)
+        cut_synonyms = r"cut|split|divide|slice"
+        cut_pattern = re.compile(
+            rf"^(?P<verb>{cut_synonyms})(?:\s+{full_target_pattern})?(?:\s+at\s+(?P<timestamp>\d{{1,2}}:\d{{2}}))?$",
+            re.I
+        )
         cut_match = cut_pattern.match(command_text)
         if cut_match:
-            target = cut_match.group("target") if cut_match.group("target") and cut_match.group("target").lower() != "at" else None
+            # Support both named targets and pronouns
+            target = None
+            reference_pronoun = None
+            if cut_match.group("target_pronoun"):
+                target = cut_match.group("target_pronoun")
+                reference_pronoun = target.lower()
+            elif cut_match.group("target") and cut_match.group("target").lower() != "at":
+                target = cut_match.group("target")
+            else:
+                target = "current"
             timestamp = cut_match.group("timestamp") if cut_match.group("timestamp") else None
             params = {}
             reference_type = None
             if target:
                 t = target.lower()
-                if t in ["last clip", "first clip"]:
+                if reference_pronoun:
+                    reference_type = "contextual"
+                    params["reference_pronoun"] = reference_pronoun
+                elif t in ["last clip", "first clip"]:
                     reference_type = "positional"
                 elif t.startswith("clip named"):
                     reference_type = "named"
@@ -33,10 +61,23 @@ class CutCommandHandler(BaseCommandHandler):
                     if cut_match.group("ref_track_type"):
                         params["ref_track_type"] = cut_match.group("ref_track_type")
                         params["track_type"] = cut_match.group("ref_track_type")
+                elif t == "this clip":
+                    reference_type = "contextual"
+                elif t == "the clip before that one":
+                    reference_type = "relative"
+                    params["relative_position"] = "before"
+                elif t == "the clip after that one":
+                    reference_type = "relative"
+                    params["relative_position"] = "after"
+                elif t.startswith("the clip that starts at"):
+                    reference_type = "by_start_time"
+                    start_time = cut_match.group("start_time")
+                    params["start_time"] = start_time
             if timestamp:
-                params["timestamp"] = timestamp
-            # Infer track_type from target name
-            if target:
+                # TODO: Get frame_rate dynamically from context or pass as argument
+                frame_rate = 30
+                params["timestamp"] = timestamp_to_frames(timestamp, frame_rate)
+            if target and not reference_pronoun:
                 if t.startswith("audio"):
                     params["track_type"] = "audio"
                 elif t.startswith("subtitle"):

@@ -8,8 +8,9 @@ class TrimOperationHandler(BaseOperationHandler):
 
     def execute(self, operation: EditOperation, executor) -> ExecutionResult:
         clip_name = operation.target
-        timestamp = operation.parameters.get("timestamp")
-        if not clip_name or not timestamp:
+        # timestamp is expected to be in frames already
+        timestamp_frames = operation.parameters.get("timestamp")
+        if not clip_name or timestamp_frames is None:
             return ExecutionResult(False, "Missing clip name or timestamp for TRIM operation.")
         frame_rate = executor.timeline.frame_rate
         track_type = operation.parameters.get("track_type", "video")
@@ -21,6 +22,5 @@ class TrimOperationHandler(BaseOperationHandler):
             track_index = found_index
         else:
             track_index = int(track_index)
-        timestamp_frames = executor._timestamp_to_frames(timestamp, frame_rate)
         result = executor.timeline.trim_clip(clip_name, timestamp_frames, track_type=track_type, track_index=track_index)
-        return ExecutionResult(result, f"Trimmed {clip_name} at {timestamp} ({timestamp_frames} frames): {result}") 
+        return ExecutionResult(result, f"Trimmed {clip_name} at {timestamp_frames} frames: {result}") 

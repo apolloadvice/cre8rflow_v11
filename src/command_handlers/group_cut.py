@@ -1,6 +1,7 @@
 import re
 from src.command_handlers.base import BaseCommandHandler
 from src.command_types import EditOperation
+from src.utils import timestamp_to_frames
 
 class GroupCutCommandHandler(BaseCommandHandler):
     def match(self, command_text: str) -> bool:
@@ -25,6 +26,8 @@ class GroupCutCommandHandler(BaseCommandHandler):
             elif target_type == "effect clips":
                 params["track_type"] = "effect"
             if timestamp:
-                params["timestamp"] = timestamp
+                # TODO: Get frame_rate dynamically from context or pass as argument
+                frame_rate = 30
+                params["timestamp"] = timestamp_to_frames(timestamp, frame_rate)
             return EditOperation(type_="CUT_GROUP", parameters=params)
         return EditOperation(type_="UNKNOWN", parameters={"raw": command_text}) 

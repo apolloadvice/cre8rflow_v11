@@ -8,15 +8,11 @@ class GroupCutOperationHandler(BaseOperationHandler):
 
     def execute(self, operation: EditOperation, executor) -> ExecutionResult:
         track_type = operation.parameters.get("track_type", "video")
-        timestamp = operation.parameters.get("timestamp")
-        if not timestamp:
+        # timestamp is expected to be in frames already
+        timestamp_frames = operation.parameters.get("timestamp")
+        if timestamp_frames is None:
             return ExecutionResult(False, "Missing timestamp for group cut operation.")
         frame_rate = executor.timeline.frame_rate
-        # Convert timestamp to frames
-        if isinstance(timestamp, (int, float)):
-            timestamp_frames = int(float(timestamp))
-        else:
-            timestamp_frames = executor._timestamp_to_frames(timestamp, frame_rate)
         # Find all clip names of the specified track_type, and their relative track index, where the timestamp is within the clip
         all_clip_names = []
         rel_indices = []
@@ -30,11 +26,11 @@ class GroupCutOperationHandler(BaseOperationHandler):
                 if clip.start < timestamp_frames < clip.end:
                     all_clip_names.append((clip.name, rel_index))
         if not all_clip_names:
-            return ExecutionResult(False, f"No clips found for track type '{track_type}' containing timestamp {timestamp}.")
+            return ExecutionResult(False, f"No clips found for track type '{track_type}' containing timestamp {timestamp_frames}.")
         # Now perform the cuts by name
         results = []
         for clip_name, track_index in all_clip_names:
-            cut_op = EditOperation(type_="CUT", target=clip_name, parameters={"timestamp": timestamp, "track_type": track_type, "track_index": track_index})
+            cut_op = EditOperation(type_="CUT", target=clip_name, parameters={"timestamp": timestamp_frames, "track_type": track_type, "track_index": track_index})
             result = executor.execute(cut_op)
             results.append((clip_name, result.success, result.message))
         # Summarize

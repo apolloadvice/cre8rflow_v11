@@ -11,6 +11,7 @@ from src.executor_handlers.fade import FadeOperationHandler
 from src.executor_handlers.group_cut import GroupCutOperationHandler
 import copy
 import time
+from src.utils import timestamp_to_frames
 
 class CommandHistoryEntry:
     def __init__(self, command_text, operation, result, before_snapshot, after_snapshot, timestamp=None):
@@ -251,7 +252,7 @@ class CommandExecutor:
                 track_index = found_index
             else:
                 track_index = int(track_index)
-            timestamp_frames = self._timestamp_to_frames(timestamp, frame_rate)
+            timestamp_frames = timestamp_to_frames(timestamp, frame_rate)
             op_result = self.timeline.trim_clip(clip_name, timestamp_frames, track_type=track_type, track_index=track_index)
             result = ExecutionResult(op_result, f"Cut operation on {clip_name} at {timestamp} ({timestamp_frames} frames): {op_result}")
             after_snapshot = copy.deepcopy(self.timeline)

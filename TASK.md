@@ -192,8 +192,9 @@
 - [ ] Implement referencing by content/position (e.g., "last clip", "clip with music")
 
 ### 10.3 Natural Language Flexibility
-- [ ] Support command synonyms/variations (e.g., 'split', 'divide', 'slice' as synonyms for 'cut')
-- [ ] Add natural references (e.g., 'this clip', 'the clip before that one', 'the clip that starts at 00:15')
+- [x] Support command synonyms/variations (e.g., 'split', 'divide', 'slice' as synonyms for 'cut')
+- [x] Add natural references (e.g., 'this clip', 'the clip before that one', 'the clip that starts at 00:15')
+- [x] Add preposition flexibility for OVERLAY (e.g., support both 'at the' and 'in')
 - [ ] Add context awareness (e.g., 'now trim it', 'move that to the end')
 - [ ] Support natural time expressions (e.g., 'thirty seconds', 'halfway through', 'the last 5 seconds')
 - [ ] Support combined commands (e.g., 'cut at 00:30 and join with clip2', 'trim the start and add a fade in')
@@ -205,9 +206,22 @@
 
 # Note: As of 2024-06-11, all major command types (CUT, TRIM, JOIN, ADD_TEXT, OVERLAY, FADE) are now handled by plugin/handler classes in both the parser and executor. The system is ready for plugin/custom command support. Group/compound operations (e.g., group cut) are implemented and tested. Next: improve natural language flexibility, add referencing by content/position, and develop user-facing features (UI, undo/redo, timeline visualization, etc.).
 
+### 10.4 Move Command Support
+- [ ] Implement MOVE command (context-aware, natural language, timeline operation)
+    - Support moving clips between tracks and positions
+    - Allow context-aware references (e.g., 'move that to the end', 'move it to the next track')
+    - Ensure recursive/nested timeline support
+    - Add unit tests for MOVE command parsing and execution
+    - Update documentation and examples
+
+### 10.4 Refactor Time Normalization
+- [ ] Refactor time normalization to occur in command handler parse methods, not in executor (2024-06-12)
+
 ### 11. Video Processing Backend
 - [ ] Design and implement ffmpeg-based rendering pipeline for timeline export
 - [ ] Implement export/render: convert timeline and operations to ffmpeg command(s)
 - [ ] Remove MoviePy as a core dependency (can be used optionally for prototyping or preview)
 - [ ] Add support for audio, subtitle, and effect tracks in ffmpeg pipeline
 - [ ] Test and validate ffmpeg-based export for all supported operations (cut, trim, join, transitions, text, etc.)
+
+- [x] Parser now robustly supports command synonyms/variations, natural references (contextual, relative, by start time), and preposition flexibility for OVERLAY. Comprehensive tests for all these features are implemented and passing. (2024-06-13)
