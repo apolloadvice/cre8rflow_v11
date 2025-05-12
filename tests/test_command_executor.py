@@ -28,10 +28,10 @@ def test_execute_cut_command():
     clip = VideoClip(name="clip1", start_frame=0, end_frame=to_frames(60))
     timeline.add_clip(clip, track_index=0)
     # Parse and execute CUT command
-    op = parser.parse_command("Cut clip1 at 00:30")
+    op = parser.parse_command("Cut clip1 at 00:30", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
-    assert "Cut operation on clip1 at 00:30" in result.message
+    assert f"Cut operation on clip1 at {to_frames('00:30')} frames" in result.message
     # Check that the timeline now has two clips split at 30s (900 frames)
     video_clips = timeline.get_track("video").clips
     assert len(video_clips) == 2
@@ -44,7 +44,7 @@ def test_execute_add_text_command():
     timeline = Timeline(frame_rate=FRAME_RATE)
     executor = CommandExecutor(timeline)
     # Parse and execute ADD_TEXT command
-    op = parser.parse_command("Add text 'Intro' at the top from 0:05 to 0:15")
+    op = parser.parse_command("Add text 'Intro' at the top from 0:05 to 0:15", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     assert "Add text 'Intro'" in result.message
@@ -60,10 +60,10 @@ def test_execute_trim_command():
     clip = VideoClip(name="clip2", start_frame=0, end_frame=to_frames(60))
     timeline.add_clip(clip, track_index=0)
     # Parse and execute TRIM command
-    op = parser.parse_command("Trim the start of clip2 to 00:10")
+    op = parser.parse_command("Trim the start of clip2 to 00:10", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
-    assert "Trimmed clip2 at 00:10" in result.message
+    assert f"Trimmed clip2 at {to_frames('00:10')} frames" in result.message
     # Check that the timeline now has two clips split at 10s (300 frames)
     video_clips = timeline.get_track("video").clips
     assert len(video_clips) == 2
@@ -104,7 +104,7 @@ def test_execute_fade_command():
     timeline = Timeline(frame_rate=FRAME_RATE)
     executor = CommandExecutor(timeline)
     # Parse and execute FADE command (audio fade out at end)
-    op = parser.parse_command("Fade out audio at the end of the timeline")
+    op = parser.parse_command("Fade out audio at the end of the timeline", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     assert "Fade out audio" in result.message
@@ -112,7 +112,7 @@ def test_execute_fade_command():
     # Add a clip for fade in
     clip = VideoClip(name="clip1", start_frame=0, end_frame=to_frames(10))
     timeline.add_clip(clip, track_index=0)
-    op2 = parser.parse_command("Fade in clip1 from 0:00 to 0:05")
+    op2 = parser.parse_command("Fade in clip1 from 0:00 to 0:05", timeline.frame_rate)
     result2 = executor.execute(op2)
     assert result2.success
     assert "Fade in clip1 from 0:00 to 0:05" in result2.message
@@ -123,12 +123,12 @@ def test_execute_overlay_command():
     timeline = Timeline(frame_rate=FRAME_RATE)
     executor = CommandExecutor(timeline)
     # Parse and execute OVERLAY command
-    op = parser.parse_command("Overlay logo.png at the top right from 10s to 20s")
+    op = parser.parse_command("Overlay logo.png at the top right from 10s to 20s", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     assert "Overlay logo.png" in result.message
     assert "at the top right" in result.message
-    assert "from 10s to 20s" in result.message
+    assert f"from {to_frames('10s')} to {to_frames('20s')}" in result.message
 
 # --- Additional tests for audio, subtitle, and effect tracks ---
 def test_execute_trim_command_audio():
@@ -137,7 +137,7 @@ def test_execute_trim_command_audio():
     executor = CommandExecutor(timeline)
     audio_clip = VideoClip(name="audio1", start_frame=0, end_frame=to_frames(20))
     timeline.add_clip(audio_clip, track_index=1)  # Audio track
-    op = parser.parse_command("Trim the start of audio1 to 00:05")
+    op = parser.parse_command("Trim the start of audio1 to 00:05", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     audio_clips = timeline.get_track("audio").clips
@@ -169,7 +169,7 @@ def test_execute_trim_command_effect():
     executor = CommandExecutor(timeline)
     effect_clip = VideoClip(name="effect1", start_frame=0, end_frame=to_frames(5))
     timeline.add_clip(effect_clip, track_index=3)
-    op = parser.parse_command("Trim the start of effect1 to 00:02")
+    op = parser.parse_command("Trim the start of effect1 to 00:02", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     effect_clips = timeline.get_track("effect").clips
@@ -185,10 +185,10 @@ def test_execute_cut_command_audio():
     audio_clip = VideoClip(name="audio1", start_frame=0, end_frame=to_frames(20))
     timeline.add_clip(audio_clip, track_index=1)
     # Parse and execute CUT command
-    op = parser.parse_command("Cut audio1 at 00:10")
+    op = parser.parse_command("Cut audio1 at 00:10", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
-    assert "Cut operation on audio1 at 00:10" in result.message
+    assert f"Cut operation on audio1 at {to_frames('00:10')} frames" in result.message
     # Check that the audio track now has two clips split at 10s (300 frames)
     audio_clips = timeline.get_track("audio").clips
     assert len(audio_clips) == 2
@@ -251,7 +251,7 @@ def test_execute_group_cut_command_video():
     timeline.add_clip(clip1, track_index=0)
     timeline.add_clip(clip2, track_index=0)
     # Parse and execute group CUT command
-    op = parser.parse_command("Cut all clips at 00:30")
+    op = parser.parse_command("Cut all clips at 00:30", timeline.frame_rate)
     result = executor.execute(op)
     print("DEBUG group cut video:", result.message)
     assert result.success
@@ -279,7 +279,7 @@ def test_execute_group_cut_command_audio():
     timeline.add_clip(audio1, track_index=1)
     timeline.add_clip(audio2, track_index=1)
     # Parse and execute group CUT command
-    op = parser.parse_command("Cut all audio clips at 00:10")
+    op = parser.parse_command("Cut all audio clips at 00:10", timeline.frame_rate)
     result = executor.execute(op)
     print("DEBUG group cut audio:", result.message)
     assert result.success
@@ -307,7 +307,7 @@ def test_execute_cut_last_clip():
     timeline.add_clip(clip1, track_index=0)
     timeline.add_clip(clip2, track_index=0)
     # Cut the last clip at 00:30 (should cut clip2 at 30s)
-    op = parser.parse_command("Cut the last clip at 00:30")
+    op = parser.parse_command("Cut the last clip at 00:30", timeline.frame_rate)
     result = executor.execute(op)
     print("DEBUG cut last clip:", result.message)
     assert result.success
@@ -329,7 +329,7 @@ def test_execute_trim_first_clip():
     timeline.add_clip(clip1, track_index=0)
     timeline.add_clip(clip2, track_index=0)
     # Trim the first clip to 00:10 (should trim clip1 at 10s)
-    op = parser.parse_command("Trim the first clip to 00:10")
+    op = parser.parse_command("Trim the first clip to 00:10", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     video_clips = timeline.get_track("video").clips
@@ -350,7 +350,7 @@ def test_execute_cut_clip_named():
     timeline.add_clip(clip1, track_index=0)
     timeline.add_clip(clip2, track_index=0)
     # Cut clip named Intro at 00:05
-    op = parser.parse_command("Cut clip named Intro at 00:05")
+    op = parser.parse_command("Cut clip named Intro at 00:05", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     video_clips = timeline.get_track("video").clips
@@ -373,7 +373,7 @@ def test_execute_cut_second_clip():
     timeline.add_clip(clip2, track_index=0)
     timeline.add_clip(clip3, track_index=0)
     # Cut the second clip at 00:15 (should cut clip2 at 15s)
-    op = parser.parse_command("Cut the second clip at 00:15")
+    op = parser.parse_command("Cut the second clip at 00:15", timeline.frame_rate)
     result = executor.execute(op)
     assert result.success
     video_clips = timeline.get_track("video").clips
@@ -396,7 +396,7 @@ def test_execute_trim_third_audio_clip():
     timeline.add_clip(audio2, track_index=1)
     timeline.add_clip(audio3, track_index=1)
     # Trim the third audio clip to 00:12 (should trim audio3 at 12s)
-    op = parser.parse_command("Trim the third audio clip to 00:12")
+    op = parser.parse_command("Trim the third audio clip to 00:12", timeline.frame_rate)
     result = executor.execute(op)
     print("DEBUG trim third audio clip:", result.message)
     assert result.success
@@ -422,7 +422,7 @@ def test_execute_cut_4th_subtitle_clip():
     timeline.add_clip(sub3, track_index=2)
     timeline.add_clip(sub4, track_index=2)
     # Cut the 4th subtitle clip at 00:07 (should cut sub4 at 7s)
-    op = parser.parse_command("Cut the 4th subtitle clip at 00:07")
+    op = parser.parse_command("Cut the 4th subtitle clip at 00:07", timeline.frame_rate)
     result = executor.execute(op)
     print("DEBUG cut 4th subtitle clip:", result.message)
     assert result.success
@@ -441,7 +441,7 @@ def test_command_history_and_undo_redo():
     # Add a clip and execute a cut
     clip = VideoClip(name="clip1", start_frame=0, end_frame=to_frames(60))
     timeline.add_clip(clip, track_index=0)
-    op1 = parser.parse_command("Cut clip1 at 00:30")
+    op1 = parser.parse_command("Cut clip1 at 00:30", timeline.frame_rate)
     result1 = executor.execute(op1, command_text="Cut clip1 at 00:30")
     assert result1.success
     # Check history entry
@@ -479,7 +479,7 @@ def test_command_history_save_to_file(tmp_path):
     # Add a clip and execute a cut
     clip = VideoClip(name="clip1", start_frame=0, end_frame=to_frames(60))
     timeline.add_clip(clip, track_index=0)
-    op1 = parser.parse_command("Cut clip1 at 00:30")
+    op1 = parser.parse_command("Cut clip1 at 00:30", timeline.frame_rate)
     result1 = executor.execute(op1, command_text="Cut clip1 at 00:30")
     # Execute a join command
     op2 = parser.parse_command("Join clip1_part1 and clip1_part2")
@@ -509,7 +509,7 @@ def test_command_history_load_from_file(tmp_path):
     # Add a clip and execute a cut
     clip = VideoClip(name="clip1", start_frame=0, end_frame=to_frames(60))
     timeline.add_clip(clip, track_index=0)
-    op1 = parser.parse_command("Cut clip1 at 00:30")
+    op1 = parser.parse_command("Cut clip1 at 00:30", timeline.frame_rate)
     result1 = executor.execute(op1, command_text="Cut clip1 at 00:30")
     # Execute a join command
     op2 = parser.parse_command("Join clip1_part1 and clip1_part2")

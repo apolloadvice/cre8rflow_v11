@@ -41,9 +41,9 @@
 - [x] Create test suite for command parsing
 - [x] Develop accuracy metrics
 - [x] Implement automated testing
-- [ ] Set up continuous improvement process
+- [x] Set up continuous improvement process (2024-06-13)
 
-# Note: As of 2024-06-10, the test suite covers all major command types (CUT, TRIM, JOIN, OVERLAY, FADE, etc.) with both positive and negative/edge/ambiguous cases. Intent recognition, entity extraction, validation accuracy metrics, and execution logic are implemented and passing. TRIM, JOIN, OVERLAY, and FADE are now fully supported in parsing, validation, and execution (OVERLAY/FADE are demo/log only).
+# Note: As of 2024-06-13, the test suite covers all major command types (CUT, TRIM, JOIN, OVERLAY, FADE, etc.) with both positive and negative/edge/ambiguous cases. Intent recognition, entity extraction, validation accuracy metrics, and execution logic are implemented and passing. TRIM, JOIN, OVERLAY, FADE, and CUT are now fully supported in parsing, validation, and execution (OVERLAY/FADE are demo/log only). Context awareness for TRIM and CUT is implemented and tested.
 
 ## 3. Video Timeline Core
 
@@ -195,16 +195,21 @@
 - [x] Support command synonyms/variations (e.g., 'split', 'divide', 'slice' as synonyms for 'cut')
 - [x] Add natural references (e.g., 'this clip', 'the clip before that one', 'the clip that starts at 00:15')
 - [x] Add preposition flexibility for OVERLAY (e.g., support both 'at the' and 'in')
-- [ ] Add context awareness (e.g., 'now trim it', 'move that to the end')
-- [ ] Support natural time expressions (e.g., 'thirty seconds', 'halfway through', 'the last 5 seconds')
-- [ ] Support combined commands (e.g., 'cut at 00:30 and join with clip2', 'trim the start and add a fade in')
-- [ ] **[Experimental] Integrate LLM (GPT) for NLP command parsing**
-    - [ ] Integrate OpenAI API for command parsing
-    - [ ] Map LLM output to internal edit operations
-    - [ ] Fallback to pattern-based parsing if LLM fails or is ambiguous
-    - [ ] Test and validate LLM-based parsing for common and edge cases
+- [x] Add context awareness for TRIM and CUT commands (2024-06-13)
+- [x] Add context awareness for all major commands (CUT, TRIM, JOIN, OVERLAY, FADE, ADD_TEXT) (2024-06-13)
+- [ ] Add context awareness for future commands (e.g., 'move that to the end', 'duplicate it', 'delete that', 'replace this with ...') — To be implemented when these commands are added
+- [x] Support natural time expressions (e.g., 'thirty seconds', 'halfway through', 'the last 5 seconds') (2024-06-13)
+- [x] Support combined commands (e.g., 'cut at 00:30 and join with clip2', 'trim the start and add a fade in') (2024-06-13)
+    - Parser robustly distinguishes between true combined commands and single JOIN/MERGE/COMBINE commands.
+    - All tests pass for both combined and single-command parsing.
+- [x] **[Experimental] Integrate LLM (GPT) for NLP command parsing** (2024-06-14)
+    - [x] Integrate OpenAI API for command parsing
+    - [x] Map LLM output to internal edit operations
+    - [x] Fallback to pattern-based parsing if LLM fails or is ambiguous
+    - [x] Test and validate LLM-based parsing for common and edge cases
+    - Note: All features implemented and tested. See README for usage and test details.
 
-# Note: As of 2024-06-11, all major command types (CUT, TRIM, JOIN, ADD_TEXT, OVERLAY, FADE) are now handled by plugin/handler classes in both the parser and executor. The system is ready for plugin/custom command support. Group/compound operations (e.g., group cut) are implemented and tested. Next: improve natural language flexibility, add referencing by content/position, and develop user-facing features (UI, undo/redo, timeline visualization, etc.).
+# Note: As of 2024-06-13, context awareness for TRIM and CUT is implemented and tested. Remaining: context awareness for other commands, natural time expressions, combined commands, and LLM integration.
 
 ### 10.4 Move Command Support
 - [ ] Implement MOVE command (context-aware, natural language, timeline operation)
@@ -214,14 +219,35 @@
     - Add unit tests for MOVE command parsing and execution
     - Update documentation and examples
 
-### 10.4 Refactor Time Normalization
-- [ ] Refactor time normalization to occur in command handler parse methods, not in executor (2024-06-12)
+### 10.5 Refactor Time Normalization
+- [x] Refactor time normalization to occur in command handler parse methods, not in executor (2024-06-12)
 
 ### 11. Video Processing Backend
-- [ ] Design and implement ffmpeg-based rendering pipeline for timeline export
-- [ ] Implement export/render: convert timeline and operations to ffmpeg command(s)
-- [ ] Remove MoviePy as a core dependency (can be used optionally for prototyping or preview)
-- [ ] Add support for audio, subtitle, and effect tracks in ffmpeg pipeline
-- [ ] Test and validate ffmpeg-based export for all supported operations (cut, trim, join, transitions, text, etc.)
+- [x] Design and implement ffmpeg-based rendering pipeline for timeline export (2024-06-14)
+  - Note: MVP is complete. Pipeline supports export, preview, crossfade transitions, and basic effects (brightness, text overlay), with tests. Advanced effects and multi-transition support are future work.
+- [x] Implement export/render: convert timeline and operations to ffmpeg command(s) (2024-06-14)
+- [x] Add support for audio, subtitle, and effect tracks in ffmpeg pipeline (effect tracks are now rendered, not just logged/skipped) (2024-06-14)
+  - Note: Effect track support is now robust; timeline/range-based effects are supported and tested as of 2024-06-14.
+- [x] Remove MoviePy as a core dependency (can be used optionally for prototyping or preview) (2024-06-14)
+- [x] Implement preview generation: allow user to play the current timeline state in the UI (low-res/fast render, can use MoviePy or ffmpeg)
+  - Note: Backend API is ready for frontend integration.
+- [x] Ensure all timeline edits (command or manual) update the timeline data structure and are reflected in the UI (UI integration: placeholder for future implementation)
+  - Note: A UI update placeholder callback is implemented in Timeline and tested. Actual UI integration will be done when the UI is built.
+- [x] Design backend API for triggering preview and export from the timeline state
+  - Note: Both preview and export endpoints are implemented, tested, and ready for frontend integration.
+- [x] Test and validate ffmpeg-based export for all supported operations (cut, trim, join, transitions, text, etc.)
+  - Note: All supported operations are covered by unit tests, including edge and failure cases.
+- [x] Add unit and integration tests for preview and export (including edge/failure cases)
+  - Note: All major and edge/failure cases are covered by tests, including transitions, effects, file validation, quality, and error handling.
+- [x] Ensure extensibility: new operations (effects, transitions, etc.) can be added to the pipeline with minimal changes
+  - Note: Both effects and transitions are now pluggable via handler registries, and extensibility is covered by tests.
+- [x] Document the user flow: edit (command/manual) → timeline update → user-initiated preview → export
+  - Note: A clear user flow section has been added to the README.md.
+- [ ] [Placeholder] Integrate backend with timeline UI for real-time edit visualization and playback (to be implemented when UI is built)
 
 - [x] Parser now robustly supports command synonyms/variations, natural references (contextual, relative, by start time), and preposition flexibility for OVERLAY. Comprehensive tests for all these features are implemented and passing. (2024-06-13)
+- [ ] Context awareness for MOVE, DUPLICATE, DELETE, REPLACE, etc., will be required if/when those commands are implemented (2024-06-13)
+- All major commands now support contextual pronouns and natural time expressions. Future commands (MOVE, DUPLICATE, DELETE, REPLACE, etc.) should follow this pattern for consistency.
+
+# TODO (2024-06-10):
+- [2024-06-14] Monitor OpenAI API changes and update prompt/response handling as needed for continued compatibility.

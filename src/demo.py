@@ -21,7 +21,7 @@ if __name__ == "__main__":
     print(f"Command: {command_text}")
 
     # Parse the command
-    operation = parser.parse_command(command_text)
+    operation = parser.parse_command(command_text, timeline.frame_rate)
     print(f"Parsed Operation: type={operation.type}, target={operation.target}, parameters={operation.parameters}")
 
     # Execute the command
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # Add text command demo
     add_text_command = "Add text 'Introduction' at the top from 0:05 to 0:15"
     print(f"\nCommand: {add_text_command}")
-    add_text_op = parser.parse_command(add_text_command)
+    add_text_op = parser.parse_command(add_text_command, timeline.frame_rate)
     print(f"Parsed Operation: type={add_text_op.type}, target={add_text_op.target}, parameters={add_text_op.parameters}")
     add_text_result = executor.execute(add_text_op)
     print(f"Execution Result: success={add_text_result.success}, message={add_text_result.message}")

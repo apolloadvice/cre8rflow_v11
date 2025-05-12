@@ -9,7 +9,7 @@ class GroupCutCommandHandler(BaseCommandHandler):
         pattern = re.compile(r"cut all (?P<target_type>clips|audio clips|subtitle clips|effect clips)(?: at (?P<timestamp>\d{1,2}:\d{2}))?", re.I)
         return bool(pattern.match(command_text))
 
-    def parse(self, command_text: str) -> EditOperation:
+    def parse(self, command_text: str, frame_rate: int = 30) -> EditOperation:
         pattern = re.compile(r"cut all (?P<target_type>clips|audio clips|subtitle clips|effect clips)(?: at (?P<timestamp>\d{1,2}:\d{2}))?", re.I)
         match = pattern.match(command_text)
         if match:
@@ -26,8 +26,6 @@ class GroupCutCommandHandler(BaseCommandHandler):
             elif target_type == "effect clips":
                 params["track_type"] = "effect"
             if timestamp:
-                # TODO: Get frame_rate dynamically from context or pass as argument
-                frame_rate = 30
                 params["timestamp"] = timestamp_to_frames(timestamp, frame_rate)
             return EditOperation(type_="CUT_GROUP", parameters=params)
         return EditOperation(type_="UNKNOWN", parameters={"raw": command_text}) 

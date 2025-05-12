@@ -1,7 +1,7 @@
 import re
 from src.command_handlers.base import BaseCommandHandler
 from src.command_types import EditOperation
-from src.utils import timestamp_to_frames
+from src.utils import timestamp_to_frames, parse_natural_time_expression
 
 ORDINALS = [
     "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"
@@ -20,15 +20,15 @@ class CutCommandHandler(BaseCommandHandler):
     def match(self, command_text: str) -> bool:
         cut_synonyms = r"cut|split|divide|slice"
         cut_pattern = re.compile(
-            rf"^(?P<verb>{cut_synonyms})(?:\s+{full_target_pattern})?(?:\s+at\s+(?P<timestamp>\d{{1,2}}:\d{{2}}))?$",
+            rf"^(?P<verb>{cut_synonyms})(?:\s+{full_target_pattern})?(?:\s+at\s+(?P<timestamp>[\w\s:-]+))?$",
             re.I
         )
         return bool(cut_pattern.match(command_text))
 
-    def parse(self, command_text: str) -> EditOperation:
+    def parse(self, command_text: str, frame_rate: int = 30) -> EditOperation:
         cut_synonyms = r"cut|split|divide|slice"
         cut_pattern = re.compile(
-            rf"^(?P<verb>{cut_synonyms})(?:\s+{full_target_pattern})?(?:\s+at\s+(?P<timestamp>\d{{1,2}}:\d{{2}}))?$",
+            rf"^(?P<verb>{cut_synonyms})(?:\s+{full_target_pattern})?(?:\s+at\s+(?P<timestamp>[\w\s:-]+))?$",
             re.I
         )
         cut_match = cut_pattern.match(command_text)
@@ -74,9 +74,11 @@ class CutCommandHandler(BaseCommandHandler):
                     start_time = cut_match.group("start_time")
                     params["start_time"] = start_time
             if timestamp:
-                # TODO: Get frame_rate dynamically from context or pass as argument
-                frame_rate = 30
-                params["timestamp"] = timestamp_to_frames(timestamp, frame_rate)
+                natural_seconds = parse_natural_time_expression(timestamp)
+                if natural_seconds is not None:
+                    params["timestamp"] = int(natural_seconds * frame_rate)
+                else:
+                    params["timestamp"] = timestamp_to_frames(timestamp, frame_rate)
             if target and not reference_pronoun:
                 if t.startswith("audio"):
                     params["track_type"] = "audio"

@@ -13,6 +13,7 @@ This project is an NLP-based video editing tool that allows users to edit videos
 ## Features
 - Parse natural language commands (e.g., "Cut clip1 at 00:30")
 - Represent video/audio clips on a timeline (with support for compound/nested clips)
+- **Apply effects to individual clips or globally/range-based via the Effects track**
 - Map parsed commands to timeline operations (all operations work recursively)
 - Modular Python codebase for easy extension (custom clips, effects, transitions)
 - Robust, versioned JSON serialization/deserialization
@@ -23,6 +24,7 @@ This project is an NLP-based video editing tool that allows users to edit videos
   - Command synonyms/variations (e.g., "split"/"divide"/"slice" for "cut")
   - Natural references (e.g., "this clip", "the clip before that one")
   - Context awareness (e.g., "now trim it")
+  - MOVE command support (context-aware, e.g., "move that to the end", "move it to the next track")
   - Natural time expressions (e.g., "thirty seconds", "halfway through")
   - Combined commands (e.g., "cut and join")
 - **Experimental: LLM (GPT) integration for NLP command parsing**
@@ -31,14 +33,61 @@ This project is an NLP-based video editing tool that allows users to edit videos
 - **Planned: ffmpeg-based export/rendering pipeline for actual video editing**
   - All timeline operations (cut, trim, join, transitions, text, etc.) will be rendered using ffmpeg for speed and flexibility
   - MoviePy is optional and can be used for prototyping or preview only
+- All timeline operations (cut, trim, join, transitions, effects) are supported in both preview and export flows.
+- **Effects can be applied per-clip or globally/range-based via the Effects track. Timeline/range-based effects are supported and composable.**
+
+## User Flow: Edit → Timeline Update → Preview → Export
+
+1. **Edit (Command or Manual UI):**
+   - The user issues a natural language command (e.g., "Cut clip1 at 00:30") or performs a manual edit in the UI.
+   - The command parser interprets the input and maps it to timeline operations (cut, trim, join, add effect, etc.).
+
+2. **Timeline Update:**
+   - The timeline data structure is updated to reflect the edit.
+   - All changes are non-destructive and versioned; the timeline can be serialized/deserialized for persistence.
+   - The UI (if present) is notified of changes and updates the visual timeline accordingly.
+
+3. **User-Initiated Preview:**
+   - The user can trigger a preview of the current timeline state (e.g., by clicking a "Preview" button).
+   - The backend generates a low-resolution, fast-rendered video preview using ffmpeg (or optionally MoviePy for prototyping).
+   - The preview is returned as a video file for UI playback, allowing the user to see edits in context before exporting.
+
+4. **Export:**
+   - When satisfied, the user triggers an export (e.g., by clicking an "Export" button).
+   - The backend uses the ffmpeg pipeline to render the full-quality video, applying all timeline edits, transitions, and effects.
+   - The exported video is returned for download or further processing.
+
+**Backend/API Support:**
+- The backend provides `/api/preview` and `/api/export` endpoints for preview and export, respectively.
+- Both endpoints accept the current timeline state as input and return a video file.
+- All timeline operations (cut, trim, join, transitions, effects) are supported in both preview and export flows.
 
 ## Tech Stack
 - Python 3.8+
 - [spaCy](https://spacy.io/) (NLP, entity extraction)
 - Regex (command pattern matching and intent recognition)
 - [ffmpeg-python](https://github.com/kkroening/ffmpeg-python) (primary backend for video processing)
-- [MoviePy](https://zulko.github.io/moviepy/) (optional, for prototyping/preview only)
+- (Optional) [MoviePy](https://zulko.github.io/moviepy/) (for prototyping/preview only, not required for production or backend export)
 - (Optional, future) Hugging Face Transformers or Rasa for advanced intent classification
+
+## LLM (GPT) Command Parsing (Experimental)
+
+- The command parser can use OpenAI GPT (via API) to interpret natural language commands.
+- If enabled, the LLM is tried first; if ambiguous or fails, the system falls back to pattern-based parsing.
+- To enable LLM parsing:
+  1. Set the environment variable `OPENAI_API_KEY` to your OpenAI API key.
+  2. Instantiate the parser with `CommandParser(use_llm=True)`.
+- LLM parsing is fully tested with mocks; no real API calls are made during unit tests.
+- All errors and LLM responses are logged to `src/llm_parser.log`.
+
+### Example (Python):
+```python
+import os
+from src.command_parser import CommandParser
+os.environ["OPENAI_API_KEY"] = "sk-..."  # Set your key
+parser = CommandParser(use_llm=True)
+result = parser.parse_command("Cut clip1 at 00:30")
+```
 
 ## Setup
 
@@ -55,9 +104,12 @@ This project is an NLP-based video editing tool that allows users to edit videos
 3. **Install dependencies:**
    ```bash
    pip install spacy
-   # For future video processing:
-   pip install moviepy ffmpeg-python
+   pip install ffmpeg-python
+   # Optional: for prototyping/preview only
+   pip install moviepy
    ```
+
+**Note:** MoviePy is only needed for prototyping or preview features. It is not required for production or backend export, which uses ffmpeg directly.
 
 ## Running the Demo
 
@@ -88,61 +140,77 @@ Execution Result: success=True, message=Add text 'Introduction' with params {'te
 
 ## Project Structure
 - `src/command_parser.py` — NLP command parser
-- `src/timeline.py` — Timeline and clip data structures
+- `src/timeline.py` — Timeline and clip data structures (including Effects track for timeline/range-based effects)
 - `src/command_executor.py` — Command-to-edit bridge
 - `src/demo.py` — Demo script
 
+## Timeline/Range-Based Effects (Effects Track)
+
+- Effects can be attached to individual clips (e.g., brightness, text overlay) or to the Effects track for global or range-based application.
+- Effects in the Effects track can specify `start` and `end` (in frames) to apply only to a portion of the timeline (future: range filtering).
+- All effects are composable and extensible via handler registration.
+
+### Example: Adding a Global Brightness Effect
+
+```python
+from src.timeline import Timeline, Effect
+
+timeline = Timeline()
+# ... add video clips ...
+# Add a global brightness effect to the Effects track
+brightness_effect = Effect(effect_type="brightness", params={"value": 0.7})
+effects_track = [t for t in timeline.tracks if t.track_type == "effect"]
+effects_track[0].clips.append(brightness_effect)
+```
+
+When exported, this will apply the brightness effect to the entire timeline.
+
 ## Testing
-Parser unit tests are included in `tests/test_command_parser.py` and all tests pass as of the latest update.
+- Standard parser unit tests: `tests/test_command_parser.py`
+- LLM parser and fallback logic: `tests/test_llm_parser.py`, `tests/test_command_parser_llm.py`
+- Run all tests:
+  ```bash
+  PYTHONPATH=src pytest
+  ```
+- LLM tests use mocking; no real API calls are made during testing.
 
 ## Contributing
-See `PLANNING.md` and `TASK.md` for architecture and task tracking.
+See `PLANNING.md`
 
-## Supported Commands & Features
-- Load a video file as a timeline clip (mocked duration)
-- Trim (cut) a clip at a given timestamp
-- Join two adjacent clips into one
-- Add a transition (e.g., crossfade) between two adjacent clips
-- Compound/nested clips: all timeline operations (trim, join, remove, move, transitions) work recursively
-- Extensibility: custom clip/effect/transition subclasses are supported in serialization/deserialization
-- `Cut clip1 at 00:30` (now supports full clip names)
-- `Add text 'Introduction' at the top from 0:05 to 0:15` (improved text extraction)
-- `Add Hello from 20 to 30 seconds`
+## API Endpoints for UI Integration
 
-## Extensibility
-- The system is designed for easy extension:
-  - Subclass `BaseClip`, `BaseEffect`, or `BaseTransition` to add new types
-  - Custom subclasses are preserved through serialization/deserialization
-  - See tests for examples of custom effect/clip support
+The backend exposes API endpoints for real-time timeline preview and export, ready for UI integration:
 
-## Command Structure & Examples
+### POST /api/preview
+- **Description:** Generate a low-res/fast preview video for the given timeline state. Returns a video file for UI playback.
+- **Payload:**
+  ```json
+  {
+    "timeline": { /* Timeline as dict/JSON (see Timeline.to_dict()) */ }
+  }
+  ```
+- **Response:** `video/mp4` file (preview)
+- **Errors:**
+  - `400`: Invalid timeline or unsupported file type
+  - `500`: ffmpeg or rendering error
 
-- See `docs/command_structure.md` for the syntax and structure of supported commands.
-- See `docs/command_examples.md` for a dataset of example commands and their parsed outputs.
+### POST /api/export
+- **Description:** Export the given timeline to a high-quality video file using ffmpeg. Returns a video file for download or further processing.
+- **Payload:**
+  ```json
+  {
+    "timeline": { /* Timeline as dict/JSON (see Timeline.to_dict()) */ }
+  }
+  ```
+  - Optional query param: `quality` (`high`, `medium`, `low`)
+- **Response:** `video/mp4` file (export)
+- **Errors:**
+  - `400`: Invalid timeline or unsupported file type
+  - `500`: ffmpeg or export error
 
-## Timeline Data Structure Design Principles
+**Both endpoints:**
+- Accept the full timeline state as input (including all tracks, clips, effects, transitions).
+- Return clear status/errors for UI feedback.
+- Schedule temporary files for deletion after response (safe for repeated use).
 
-- **Multiple Track Types:** Supports multiple video, audio, subtitle, and effects tracks for flexible editing.
-- **Sequential Clips:** Clips on the same track are sequential (non-overlapping) for simplicity; compound/nested clips planned for future phases.
-- **Transitions as Objects:** Transitions are represented as dedicated objects connecting clips, not as clip properties.
-- **Effects as Clip Properties:** Effects (e.g., speed, color correction) are stored as properties of clips.
-- **Frame-Based Timing:** All timing is stored internally as frames (integer) for precision, with support for variable frame rates. UI accepts/displays both seconds and frames.
-- **JSON Serialization:** Timeline structure is easily serializable to JSON for project saving/loading, with a version field for backward compatibility.
-- **Extensibility:** Base classes/interfaces for tracks, clips, and effects allow for future extension and plugin support.
-
-*Implementation will proceed incrementally, starting with the core data structures and expanding as needed.*
-
-## What's Next
-- Improve natural language flexibility and context understanding (see planned NLP enhancements above)
-- **User-facing features: UI, command input, command history display, timeline visualization, undo/redo controls**
-- **Planned: Implement ffmpeg-based export/rendering pipeline for timeline**
-- Add referencing by content/position (e.g., "last clip", "clip with music")
-- **Current limitations:**
-  - Pattern-based command parsing (not true semantic NLP yet; LLM-based parsing is experimental)
-  - Limited natural language flexibility (commands must follow specific patterns unless using LLM)
-  - No support for referencing clips by content or position
-  - No custom effect/transition creation via natural language
-  - Limited error recovery and suggestions
-
----
-*This is an early prototype. See `PLANNING.md` for roadmap and next steps.* 
+These endpoints are ready for real-time UI integration and can be triggered programmatically.

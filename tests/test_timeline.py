@@ -399,3 +399,36 @@ def test_remove_clip_by_index_nested():
     assert loaded_inner.end == 30
     assert loaded_outer.start == 0
     assert loaded_outer.end == 30
+
+def test_timeline_on_change_callback():
+    """
+    Test that the Timeline on_change callback is called after each edit, as a placeholder for UI updates.
+    """
+    from src.timeline import Timeline, VideoClip, Transition
+    callback_calls = []
+    def on_change_cb(tl):
+        callback_calls.append(tl)
+    timeline = Timeline(frame_rate=30, on_change=on_change_cb)
+    # Add a clip
+    clip1 = VideoClip(name="clip1", start_frame=0, end_frame=30)
+    timeline.add_clip(clip1, track_index=0)
+    # Trim the clip
+    timeline.trim_clip("clip1", 15, track_type="video", track_index=0)
+    # Add another clip and join
+    clip2 = VideoClip(name="clip2", start_frame=0, end_frame=30)
+    timeline.add_clip(clip2, track_index=0)
+    timeline.join_clips("clip1_part2", "clip2", track_type="video", track_index=0)
+    # Add a transition
+    timeline.add_transition("clip1_part1", "clip1_part2_joined_clip2", transition_type="crossfade", duration=2, track_type="video", track_index=0)
+    # Remove a clip
+    timeline.remove_clip("clip1_part1", track_type="video", track_index=0)
+    # Move a clip (move to audio track)
+    timeline.move_clip("clip1_part2_joined_clip2", source_track_type="video", dest_track_type="audio", dest_track_index=0)
+    # Add and remove a track
+    new_track = timeline.add_track("Extra Video", "video")
+    timeline.remove_track(track_type="video", track_index=1)  # Remove the extra video track
+    # There should be a callback call for each edit
+    assert len(callback_calls) == 9
+    # All calls should receive the timeline instance
+    for tl in callback_calls:
+        assert isinstance(tl, Timeline)

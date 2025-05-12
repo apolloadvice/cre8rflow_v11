@@ -1,7 +1,7 @@
 import re
 from src.command_handlers.base import BaseCommandHandler
 from src.command_types import EditOperation
-from src.utils import timestamp_to_frames
+from src.utils import timestamp_to_frames, parse_natural_time_expression
 
 ORDINALS = [
     "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"
@@ -20,15 +20,15 @@ class TrimCommandHandler(BaseCommandHandler):
     def match(self, command_text: str) -> bool:
         trim_synonyms = r"trim|shorten|crop|reduce"
         trim_pattern = re.compile(
-            rf"^(?P<verb>{trim_synonyms})(?:\s+(?:the )?(?:start of )?)?(?:{full_target_pattern})?(?:\s+(?:to|at)\s+(?P<timestamp>\d{{1,2}}:\d{{2}}|\d+))?$",
+            rf"^(?P<verb>{trim_synonyms})(?:\s+(?:the )?(?:start of )?)?(?:\s*(?P<target_expr>{full_target_pattern}))?(?:\s+(?:to|at)\s+(?P<timestamp>[\w\s:-]+))?$",
             re.I
         )
         return bool(trim_pattern.match(command_text))
 
-    def parse(self, command_text: str) -> EditOperation:
+    def parse(self, command_text: str, frame_rate: int = 30) -> EditOperation:
         trim_synonyms = r"trim|shorten|crop|reduce"
         trim_pattern = re.compile(
-            rf"^(?P<verb>{trim_synonyms})(?:\s+(?:the )?(?:start of )?)?(?:{full_target_pattern})?(?:\s+(?:to|at)\s+(?P<timestamp>\d{{1,2}}:\d{{2}}|\d+))?$",
+            rf"^(?P<verb>{trim_synonyms})(?:\s+(?:the )?(?:start of )?)?(?:\s*(?P<target_expr>{full_target_pattern}))?(?:\s+(?:to|at)\s+(?P<timestamp>[\w\s:-]+))?$",
             re.I
         )
         trim_match = trim_pattern.match(command_text)
@@ -39,6 +39,8 @@ class TrimCommandHandler(BaseCommandHandler):
             if trim_match.group("target_pronoun"):
                 target = trim_match.group("target_pronoun")
                 reference_pronoun = target.lower()
+            elif trim_match.group("target_expr"):
+                target = trim_match.group("target_expr")
             elif trim_match.group("target") and trim_match.group("target").lower() != "to":
                 target = trim_match.group("target")
             timestamp = trim_match.group("timestamp") if trim_match.group("timestamp") else None
@@ -72,9 +74,11 @@ class TrimCommandHandler(BaseCommandHandler):
                     start_time = trim_match.group("start_time")
                     params["start_time"] = start_time
             if timestamp:
-                # TODO: Get frame_rate dynamically from context or pass as argument
-                frame_rate = 30
-                params["timestamp"] = timestamp_to_frames(timestamp, frame_rate)
+                natural_seconds = parse_natural_time_expression(timestamp)
+                if natural_seconds is not None:
+                    params["timestamp"] = int(natural_seconds * frame_rate)
+                else:
+                    params["timestamp"] = timestamp_to_frames(timestamp, frame_rate)
             if target and not reference_pronoun:
                 if t.startswith("audio"):
                     params["track_type"] = "audio"

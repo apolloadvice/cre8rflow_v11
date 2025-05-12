@@ -230,35 +230,7 @@ class CommandExecutor:
                 entry = CommandHistoryEntry(command_text, operation, result, before_snapshot, after_snapshot)
                 self.command_history.add_entry(entry)
                 return result
-        if operation.type == "CUT":
-            clip_name = operation.target
-            timestamp = operation.parameters.get("timestamp")
-            if not clip_name or not timestamp:
-                result = ExecutionResult(False, "Missing clip name or timestamp for CUT operation.")
-                after_snapshot = copy.deepcopy(self.timeline)
-                entry = CommandHistoryEntry(command_text, operation, result, before_snapshot, after_snapshot)
-                self.command_history.add_entry(entry)
-                return result
-            track_type = operation.parameters.get("track_type", "video")
-            track_index = operation.parameters.get("track_index")
-            if track_index is None:
-                found_index = self.find_track_index_for_clip(clip_name, track_type)
-                if found_index is None:
-                    result = ExecutionResult(False, f"Clip '{clip_name}' not found in any {track_type} track.")
-                    after_snapshot = copy.deepcopy(self.timeline)
-                    entry = CommandHistoryEntry(command_text, operation, result, before_snapshot, after_snapshot)
-                    self.command_history.add_entry(entry)
-                    return result
-                track_index = found_index
-            else:
-                track_index = int(track_index)
-            timestamp_frames = timestamp_to_frames(timestamp, frame_rate)
-            op_result = self.timeline.trim_clip(clip_name, timestamp_frames, track_type=track_type, track_index=track_index)
-            result = ExecutionResult(op_result, f"Cut operation on {clip_name} at {timestamp} ({timestamp_frames} frames): {op_result}")
-            after_snapshot = copy.deepcopy(self.timeline)
-            entry = CommandHistoryEntry(command_text, operation, result, before_snapshot, after_snapshot)
-            self.command_history.add_entry(entry)
-            return result
+        # Remove fallback CUT operation logic that normalizes time
         result = ExecutionResult(False, f"Unknown operation: {operation.type}")
         after_snapshot = copy.deepcopy(self.timeline)
         entry = CommandHistoryEntry(command_text, operation, result, before_snapshot, after_snapshot)

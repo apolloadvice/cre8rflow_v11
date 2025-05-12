@@ -44,12 +44,13 @@ class VideoClip(BaseClip):
     Represents a video or audio clip on the timeline.
     start and end are in frames (integer), not seconds.
     """
-    def __init__(self, name: str, start_frame: int, end_frame: int, track_type: str = "video"):
+    def __init__(self, name: str, start_frame: int, end_frame: int, track_type: str = "video", file_path: Optional[str] = None):
         self.name: str = name
         self.start: int = int(start_frame)  # in frames
         self.end: int = int(end_frame)      # in frames
         self.track_type: str = track_type
         self.effects: list = []  # List[Effect]
+        self.file_path: Optional[str] = file_path  # Path to the source video file
 
     def add_effect(self, effect: 'Effect') -> None:
         """
@@ -89,7 +90,8 @@ class VideoClip(BaseClip):
             "start": self.start,
             "end": self.end,
             "track_type": self.track_type,
-            "effects": [effect.to_dict() for effect in self.effects]
+            "effects": [effect.to_dict() for effect in self.effects],
+            "file_path": self.file_path,
         }
 
     @staticmethod
@@ -107,7 +109,8 @@ class VideoClip(BaseClip):
             name=data["name"],
             start_frame=data["start"],
             end_frame=data["end"],
-            track_type=data.get("track_type", "video")
+            track_type=data.get("track_type", "video"),
+            file_path=data.get("file_path")
         )
         clip.effects = [Effect.from_dict(e) for e in data.get("effects", [])]
         return clip
@@ -461,11 +464,14 @@ class BaseEffect(ABC):
 
 class Effect(BaseEffect):
     """
-    Represents an effect applied to a clip (e.g., speed, color correction, blur).
+    Represents an effect applied to a clip or timeline (e.g., speed, color correction, blur).
+    Can be attached to a clip or to the Effects track for timeline/range-based effects.
     """
-    def __init__(self, effect_type: str, params: dict = None):
+    def __init__(self, effect_type: str, params: dict = None, start: int = None, end: int = None):
         self.effect_type: str = effect_type
         self.params: dict = params or {}
+        self.start: int = start  # Start frame (optional, for range-based effects)
+        self.end: int = end      # End frame (optional, for range-based effects)
 
     def to_dict(self) -> dict:
         """
@@ -473,11 +479,16 @@ class Effect(BaseEffect):
         Returns:
             dict: Serialized representation of the Effect.
         """
-        return {
+        data = {
             "_type": self.__class__.__name__,
             "effect_type": self.effect_type,
             "params": self.params
         }
+        if self.start is not None:
+            data["start"] = self.start
+        if self.end is not None:
+            data["end"] = self.end
+        return data
 
     @staticmethod
     def from_dict(data: dict) -> 'Effect':
@@ -492,7 +503,9 @@ class Effect(BaseEffect):
         cls = globals().get(data.get("_type", "Effect"), Effect)
         return cls(
             effect_type=data["effect_type"],
-            params=data.get("params", {})
+            params=data.get("params", {}),
+            start=data.get("start"),
+            end=data.get("end")
         )
 
     def apply(self, clip: 'BaseClip') -> None:
@@ -507,21 +520,32 @@ class Effect(BaseEffect):
 class Timeline:
     """
     Represents a video editing timeline with multiple tracks and clips.
+    The Effects track contains Effect objects that may apply globally or to a range of the timeline (using start/end frames).
     """
-    def __init__(self, frame_rate: float = 30.0):
+    def __init__(self, frame_rate: float = 30.0, on_change: Optional[callable] = None):
         """
         Initialize an empty timeline with default tracks for video, audio, subtitle, and effects.
         frame_rate: frames per second (used for all time/frame conversions)
+        on_change: Optional callback to notify UI of changes (placeholder for future UI integration)
+        The Effects track contains Effect objects with optional start/end attributes for range-based effects.
         """
         self.tracks: List[Track] = [
             Track(name="Video 1", track_type=TrackType.VIDEO.value),
             Track(name="Audio 1", track_type=TrackType.AUDIO.value),
             Track(name="Subtitles", track_type=TrackType.SUBTITLE.value),
-            Track(name="Effects", track_type=TrackType.EFFECT.value),
+            Track(name="Effects", track_type=TrackType.EFFECT.value),  # Contains Effect objects
         ]
         self.duration: float = 0.0
         self.transitions: list[Transition] = []
         self.frame_rate: float = frame_rate
+        self.on_change = on_change
+
+    def _notify_change(self):
+        """
+        Call the on_change callback if set. Placeholder for UI integration.
+        """
+        if self.on_change:
+            self.on_change(self)
 
     def add_clip(self, clip: VideoClip, track_index: int = 0, position: Optional[float] = None) -> None:
         """
@@ -535,11 +559,14 @@ class Timeline:
         track = self.tracks[track_index]
         track.add_clip(clip, position=position)
         self.duration = max(self.duration, clip.end)
+        self._notify_change()
 
     def load_video(self, file_path: str, track_index: int = 0, position: Optional[float] = None) -> VideoClip:
         """
         Load a video file and add it as a clip to the timeline.
         For now, this mocks the duration (e.g., 60s) and uses the file name as the clip name.
+        The file_path is stored in the VideoClip for export/rendering.
+        MoviePy is NOT required for production or backend export; it may be used optionally for prototyping/preview only.
 
         Args:
             file_path (str): Path to the video file
@@ -550,9 +577,9 @@ class Timeline:
             VideoClip: The created video clip
         """
         name = os.path.splitext(os.path.basename(file_path))[0]
-        # TODO: Use MoviePy to get real duration
+        # Duration is mocked for now (e.g., 60s). MoviePy can be used optionally for prototyping/preview only.
         duration = 60.0
-        clip = VideoClip(name=name, start_frame=0, end_frame=duration)
+        clip = VideoClip(name=name, start_frame=0, end_frame=duration, file_path=file_path)
         self.add_clip(clip, track_index=track_index, position=position)
         return clip
 
@@ -598,6 +625,7 @@ class Timeline:
             parent.insert(idx, second)
             parent.insert(idx, first)
             self._update_ancestor_bounds(track, parent)
+            self._notify_change()
             return True
         return False
 
@@ -633,6 +661,7 @@ class Timeline:
                     parent.pop(idx)
                     parent.insert(idx, joined_clip)
                     self._update_ancestor_bounds(track, parent)
+                    self._notify_change()
                     return True
         return False
 
@@ -659,6 +688,7 @@ class Timeline:
                 if abs(first.end - second.start) < 1e-6:
                     transition = Transition(from_clip=from_clip_name, to_clip=to_clip_name, transition_type=transition_type, duration=duration)
                     self.transitions.append(transition)
+                    self._notify_change()
                     return True
         return False
 
@@ -682,6 +712,7 @@ class Timeline:
         if clip is not None:
             parent.pop(idx)
             self._update_ancestor_bounds(track, parent)
+            self._notify_change()
             return True
         return False
 
@@ -704,6 +735,7 @@ class Timeline:
             parent, idx, _ = flat[clip_index]
             parent.pop(idx)
             self._update_ancestor_bounds(track, parent)
+            self._notify_change()
             return True
         return False
 
@@ -731,6 +763,7 @@ class Timeline:
             # Add to destination
             dest_track = self.get_track(dest_track_type, dest_track_index)
             dest_track.add_clip(clip_to_move, position=dest_position)
+            self._notify_change()
             return True
         return False
 
@@ -748,6 +781,7 @@ class Timeline:
             self.tracks.append(new_track)
         else:
             self.tracks.insert(index, new_track)
+        self._notify_change()
         return new_track
 
     def remove_track(self, index: int = None, track_type: str = None, track_index: int = 0) -> bool:
@@ -761,11 +795,13 @@ class Timeline:
             matches = [i for i, t in enumerate(self.tracks) if t.track_type == track_type]
             if len(matches) > track_index:
                 self.tracks.pop(matches[track_index])
+                self._notify_change()
                 return True
             return False
         elif index is not None:
             if 0 <= index < len(self.tracks):
                 self.tracks.pop(index)
+                self._notify_change()
                 return True
             return False
         else:
@@ -843,3 +879,43 @@ class Timeline:
                 if found[2] is not None:
                     return found
         return (None, None, None)
+
+    def get_all_clips(self, track_type: str = "video") -> list:
+        """
+        Return a flat list of all clips of the given track type (default: video), including those in nested CompoundClips, in timeline order.
+
+        Args:
+            track_type (str): The type of track to extract clips from (e.g., 'video', 'audio').
+
+        Returns:
+            list: Flat list of all BaseClip instances (including nested) in timeline order.
+        Raises:
+            AttributeError: If a clip does not have a valid file_path attribute (required for export).
+        """
+        clips = []
+        for track in self.tracks:
+            if track.track_type == track_type:
+                for clip in track.clips:
+                    if hasattr(clip, 'flatten_clips'):
+                        nested = clip.flatten_clips()
+                        clips.extend(nested)
+                    else:
+                        clips.append(clip)
+        # Optionally, sort by start time
+        clips.sort(key=lambda c: getattr(c, 'start', 0))
+        # Check file_path attribute
+        for clip in clips:
+            if not hasattr(clip, 'file_path') or not clip.file_path:
+                raise AttributeError(f"Clip {getattr(clip, 'name', repr(clip))} is missing required 'file_path' attribute for export.")
+        return clips
+
+    def get_timeline_effects(self) -> list:
+        """
+        Return all Effect objects from the Effects track (timeline/range-based effects).
+        Returns:
+            list: List of Effect objects from the Effects track.
+        """
+        effects_tracks = [t for t in self.tracks if t.track_type == TrackType.EFFECT.value]
+        if not effects_tracks:
+            return []
+        return effects_tracks[0].clips  # These are Effect objects

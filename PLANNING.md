@@ -15,6 +15,7 @@
     - Command synonyms/variations (e.g., "split", "divide", "slice" for "cut")
     - Natural references (e.g., "this clip", "the clip before that one")
     - Context awareness (e.g., "now trim it")
+    - MOVE command support (context-aware, e.g., "move that to the end", "move it to the next track")
     - Natural time expressions (e.g., "thirty seconds", "halfway through")
     - Combined commands (e.g., "cut and join")
   - **Experimental: Integrate LLM (GPT) for NLP command parsing (OpenAI API, fallback to pattern-based parsing)**
@@ -48,6 +49,7 @@ The NLP Video Editor is a specialized tool that enables users to edit video clip
   - Adding text/captions
   - Basic color correction
   - Audio adjustments
+  - Moving clips between tracks/positions (MOVE command, context-aware)
 
 ### User Experience
 - Command input interface (text field)
@@ -214,3 +216,13 @@ The NLP Video Editor is a specialized tool that enables users to edit video clip
 - **Extensibility:** Base classes/interfaces for tracks, clips, and effects allow for future extension and plugin support.
 
 *Implementation will proceed incrementally, starting with the core data structures and expanding as needed.*
+
+## Context Awareness & Natural Time Expressions (2024-06-13)
+- All major commands (CUT, TRIM, JOIN, OVERLAY, FADE, ADD_TEXT) now support:
+  - Contextual pronouns ("it", "that", "this", etc.)
+  - Natural time expressions ("thirty seconds", "halfway through", etc.)
+- Future commands (MOVE, DUPLICATE, DELETE, REPLACE, etc.) should follow this pattern for consistency and user experience.
+
+- Improve natural language flexibility and context understanding
+  - [x] Context awareness and natural time expressions for all major commands (2024-06-13)
+  - [ ] Add context/time support for future commands (MOVE, DUPLICATE, DELETE, REPLACE, etc.)
