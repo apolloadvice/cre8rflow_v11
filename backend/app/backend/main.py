@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from src.backend.preview_api import router as preview_router
+from app.backend.preview_api import router as preview_router
+from app.backend.timeline_api import router as timeline_router
 
 app = FastAPI()
 
@@ -9,4 +10,7 @@ def read_root():
     return {"status": "ok"}
 
 # Include the preview API router
-app.include_router(preview_router, prefix="/api") 
+app.include_router(preview_router, prefix="/api")
+
+# Include the timeline API router
+app.include_router(timeline_router, prefix="/api") 
