@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { useEffect, useCallback } from 'react';
 import { persist } from 'zustand/middleware';
@@ -10,6 +9,15 @@ export interface Clip {
   track: number;
   type: string;
   name: string;
+  file_path?: string; // Backend-accessible video file path
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  file_path: string;
+  duration: number;
+  // Add other metadata as needed (e.g., thumbnail, type)
 }
 
 interface EditorState {
@@ -19,6 +27,7 @@ interface EditorState {
   selectedClipId: string | null;
   activeVideoAsset: any | null;
   videoSrc: string | undefined;
+  assets: Asset[]; // New: asset store
   
   // Layout settings
   layout: {
@@ -57,6 +66,10 @@ interface EditorStore extends EditorState {
   
   // Computed
   recalculateDuration: () => void;
+  
+  addAsset: (asset: Asset) => void;
+  removeAsset: (id: string) => void;
+  getAssetById: (id: string) => Asset | undefined;
 }
 
 // Define StateWithoutHistory type that can be used for history entries
@@ -80,6 +93,7 @@ export const useEditorStore = create<EditorStore>()(
       selectedClipId: null,
       activeVideoAsset: null,
       videoSrc: undefined,
+      assets: [],
       
       // Default layout sizes
       layout: {
@@ -218,6 +232,10 @@ export const useEditorStore = create<EditorStore>()(
         const maxEnd = Math.max(...clips.map(clip => clip.end));
         set({ duration: maxEnd });
       },
+      
+      addAsset: (asset) => set((state) => ({ assets: [...state.assets, asset] })),
+      removeAsset: (id) => set((state) => ({ assets: state.assets.filter(a => a.id !== id) })),
+      getAssetById: (id) => get().assets.find(a => a.id === id),
     }),
     {
       name: 'cre8r-editor-storage',

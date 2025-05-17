@@ -1,15 +1,16 @@
 import re
 from typing import Optional, Dict, Any
 import spacy
-from src.command_types import EditOperation, CompoundOperation
-from src.command_handlers.cut import CutCommandHandler
-from src.command_handlers.trim import TrimCommandHandler
-from src.command_handlers.join import JoinCommandHandler
-from src.command_handlers.add_text import AddTextCommandHandler
-from src.command_handlers.overlay import OverlayCommandHandler
-from src.command_handlers.fade import FadeCommandHandler
-from src.command_handlers.group_cut import GroupCutCommandHandler
-from src.utils import timestamp_to_frames
+from app.command_types import EditOperation, CompoundOperation
+from app.command_handlers.cut import CutCommandHandler
+from app.command_handlers.trim import TrimCommandHandler
+from app.command_handlers.join import JoinCommandHandler
+from app.command_handlers.add_text import AddTextCommandHandler
+from app.command_handlers.overlay import OverlayCommandHandler
+from app.command_handlers.fade import FadeCommandHandler
+from app.command_handlers.group_cut import GroupCutCommandHandler
+from app.command_handlers.remove import RemoveCommandHandler
+from app.utils import timestamp_to_frames
 import importlib
 
 class CommandParser:
@@ -40,12 +41,13 @@ class CommandParser:
         self.register_handler(AddTextCommandHandler())
         self.register_handler(OverlayCommandHandler())
         self.register_handler(FadeCommandHandler())
+        self.register_handler(RemoveCommandHandler())
         # TODO: Register other handlers as they are refactored
         self.use_llm = use_llm
         # Import LLM parser only if needed (avoids dependency if not used)
         self.llm_parser = None
         if self.use_llm:
-            self.llm_parser = importlib.import_module("src.llm_parser")
+            self.llm_parser = importlib.import_module("app.llm_parser")
 
     def register_handler(self, handler):
         self.handlers.append(handler)

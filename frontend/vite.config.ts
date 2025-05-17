@@ -1,4 +1,3 @@
-
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import path from 'path'
@@ -23,7 +22,7 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       protocol: 'ws',
       host: 'localhost',
-      clientPort: 443
+      clientPort: 8080
     }
   },
   preview: {
@@ -32,5 +31,13 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     allowedHosts: true,
     cors: true
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/__tests__/setupTests.ts',
+    globals: true,
+    coverage: {
+      reporter: ['text', 'json', 'html'],
+    },
   }
 }))

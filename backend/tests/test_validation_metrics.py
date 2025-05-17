@@ -1,5 +1,5 @@
 import pytest
-from src.command_parser import CommandParser
+from app.command_parser import CommandParser
 
 # Labeled dataset: (command, expected_valid)
 VALIDATION_TEST_CASES = [

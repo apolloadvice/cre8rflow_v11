@@ -1,5 +1,5 @@
 import pytest
-from src.timeline import Timeline, VideoClip, Effect, Transition, TrackType, CompoundClip
+from app.timeline import Timeline, VideoClip, Effect, Transition, TrackType, CompoundClip
 
 def test_timeline_json_serialization():
     # Create a timeline with one video and one audio clip, one effect, and one transition
@@ -43,7 +43,7 @@ def test_timeline_json_serialization():
     assert t.duration == 24
 
 def test_timeline_extensible_custom_effect():
-    from src.timeline import Timeline, VideoClip, BaseEffect, Effect, Transition, TrackType
+    from app.timeline import Timeline, VideoClip, BaseEffect, Effect, Transition, TrackType
     import json
 
     class CustomEffect(Effect):
@@ -404,7 +404,7 @@ def test_timeline_on_change_callback():
     """
     Test that the Timeline on_change callback is called after each edit, as a placeholder for UI updates.
     """
-    from src.timeline import Timeline, VideoClip, Transition
+    from app.timeline import Timeline, VideoClip, Transition
     callback_calls = []
     def on_change_cb(tl):
         callback_calls.append(tl)

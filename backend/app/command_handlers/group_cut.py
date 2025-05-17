@@ -1,7 +1,7 @@
 import re
-from src.command_handlers.base import BaseCommandHandler
-from src.command_types import EditOperation
-from src.utils import timestamp_to_frames
+from app.command_handlers.base import BaseCommandHandler
+from app.command_types import EditOperation
+from app.utils import timestamp_to_frames
 
 class GroupCutCommandHandler(BaseCommandHandler):
     def match(self, command_text: str) -> bool:

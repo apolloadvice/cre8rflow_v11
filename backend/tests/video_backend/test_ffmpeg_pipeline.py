@@ -1,6 +1,6 @@
 import pytest
-from src.video_backend.ffmpeg_pipeline import FFMpegPipeline
-from src.timeline import Timeline, Track, VideoClip, CompoundClip, Transition, Effect
+from app.video_backend.ffmpeg_pipeline import FFMpegPipeline
+from app.timeline import Timeline, Track, VideoClip, CompoundClip, Transition, Effect
 import subprocess
 import os
 
@@ -454,7 +454,7 @@ def test_render_export_text_overlay_effect(monkeypatch, tmp_path):
     """
     Test that render_export generates the correct ffmpeg command for a text overlay effect on a single video clip.
     """
-    from src.timeline import Effect
+    from app.timeline import Effect
     # Create a video file
     video_path = tmp_path / "video.mp4"
     video_path.write_text("")
@@ -495,12 +495,12 @@ def test_register_custom_transition_handler(tmp_path):
     """
     Test that a custom transition handler can be registered and used by FFMpegPipeline.
     """
-    from src.timeline import Transition
+    from app.timeline import Transition
     # Define a custom handler for 'wipe' transitions
     def wipe_handler(transition, video_clips, timeline):
         return "[0:v][1:v]xfade=transition=wipe:duration=2:offset=1,format=yuv420p[vout]"
     # Register the custom handler
-    from src.video_backend.ffmpeg_pipeline import FFMpegPipeline
+    from app.video_backend.ffmpeg_pipeline import FFMpegPipeline
     FFMpegPipeline.register_transition_handler('wipe', wipe_handler)
     # Create two video files
     video_path1 = tmp_path / "video1.mp4"

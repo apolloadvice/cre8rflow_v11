@@ -1,8 +1,16 @@
 import pytest
-from src.timeline import Timeline, TrackType, Track, VideoClip
+from app.timeline import Timeline, TrackType, Track, VideoClip
+from app.timeline import Timeline, TrackType, Track
+from app.timeline import Track, VideoClip, TrackType
+from app.timeline import Timeline, VideoClip
+from app.timeline import Timeline, VideoClip
+from app.timeline import Timeline, VideoClip
+from app.timeline import Timeline, TrackType
+from app.timeline import Timeline, TrackType
+from app.timeline import VideoClip, Effect
 
 def test_timeline_initializes_with_all_track_types():
-    from src.timeline import Timeline, TrackType, Track
+    from app.timeline import Timeline, TrackType, Track
     timeline = Timeline()
     assert len(timeline.tracks) == 4
     track_types = {t.track_type for t in timeline.tracks}
@@ -21,7 +29,7 @@ def test_timeline_initializes_with_all_track_types():
         assert isinstance(t, Track)
 
 def test_track_add_clip_sequential_enforcement():
-    from src.timeline import Track, VideoClip, TrackType
+    from app.timeline import Track, VideoClip, TrackType
     track = Track(name="Video 1", track_type=TrackType.VIDEO.value)
     # First clip
     clip1 = VideoClip(name="clip1", start_frame=0, end_frame=300)  # 10s at 30fps
@@ -50,7 +58,7 @@ def test_track_add_clip_sequential_enforcement():
     assert [c.start for c in track.clips] == [0, 300, 450]
 
 def test_timeline_add_clip_sequential_enforcement():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add two clips to the first track (Video 1)
     clip1 = VideoClip(name="clip1", start_frame=0, end_frame=300)
@@ -76,7 +84,7 @@ def test_timeline_add_clip_sequential_enforcement():
         assert "sequential" in str(e)
 
 def test_timeline_remove_clip_by_name_and_index():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add clips to all track types
     video_clip = VideoClip(name="v1", start_frame=0, end_frame=150, track_type="video")
@@ -116,7 +124,7 @@ def test_timeline_remove_clip_by_name_and_index():
     assert timeline.remove_clip_by_index(0, track_type="video", track_index=0) is False
 
 def test_timeline_move_clip_between_tracks():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add one clip to each track
     video_clip = VideoClip(name="v1", start_frame=0, end_frame=150, track_type="video")
@@ -151,7 +159,7 @@ def test_timeline_move_clip_between_tracks():
     assert timeline.move_clip("notfound", source_track_type="video", source_track_index=0, dest_track_type="audio", dest_track_index=0) is False
 
 def test_timeline_add_track():
-    from src.timeline import Timeline, TrackType
+    from app.timeline import Timeline, TrackType
     timeline = Timeline()
     initial_count = len(timeline.tracks)
     # Add a new video track at the end
@@ -184,7 +192,7 @@ def test_timeline_add_track():
         assert "Invalid track_type" in str(e)
 
 def test_timeline_remove_track():
-    from src.timeline import Timeline, TrackType
+    from app.timeline import Timeline, TrackType
     timeline = Timeline()
     # Add extra tracks for testing
     t_video2 = timeline.add_track(name="Video 2", track_type=TrackType.VIDEO.value)
@@ -213,7 +221,7 @@ def test_timeline_remove_track():
         assert "Must provide either index or track_type" in str(e)
 
 def test_videoclip_add_and_remove_effects():
-    from src.timeline import VideoClip, Effect
+    from app.timeline import VideoClip, Effect
     clip = VideoClip(name="c1", start_frame=0, end_frame=300)
     # Add effects
     e1 = Effect("speed", {"factor": 2.0})
