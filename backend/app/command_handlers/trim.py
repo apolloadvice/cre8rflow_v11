@@ -1,7 +1,7 @@
 import re
-from src.command_handlers.base import BaseCommandHandler
-from src.command_types import EditOperation
-from src.utils import timestamp_to_frames, parse_natural_time_expression
+from app.command_handlers.base import BaseCommandHandler
+from app.command_types import EditOperation
+from app.utils import timestamp_to_frames, parse_natural_time_expression
 
 ORDINALS = [
     "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"

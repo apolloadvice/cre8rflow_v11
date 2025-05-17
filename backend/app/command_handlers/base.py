@@ -1,5 +1,5 @@
 import abc
-from src.command_types import EditOperation
+from app.command_types import EditOperation
 
 class BaseCommandHandler(abc.ABC):
     @abc.abstractmethod

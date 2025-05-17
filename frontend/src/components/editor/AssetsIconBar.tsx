@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useEditorStore } from '@/store/editorStore';
+import { uploadVideo } from "@/api/apiClient";
 
 // Define VideoAsset type
 type VideoAsset = {
@@ -15,6 +16,7 @@ type VideoAsset = {
   duration: number;
   uploaded: Date;
   src?: string;
+  file_path?: string;
 };
 
 const AssetsIconBar = () => {
@@ -24,7 +26,7 @@ const AssetsIconBar = () => {
   const [isVideoDialogOpen, setIsVideoDialogOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const { toast } = useToast();
-  const { setActiveVideoAsset, setVideoSrc } = useEditorStore();
+  const { setActiveVideoAsset, setVideoSrc, addAsset } = useEditorStore();
 
   const handleIconClick = (tabId: string) => {
     // If the video tab is clicked, open the upload dialog if there are no videos
@@ -80,7 +82,7 @@ const AssetsIconBar = () => {
     }
   };
 
-  const handleFileUpload = (files: FileList) => {
+  const handleFileUpload = async (files: FileList) => {
     const file = files[0];
 
     if (!file) return;
@@ -105,11 +107,23 @@ const AssetsIconBar = () => {
 
     setIsUploading(true);
 
-    const videoUrl = URL.createObjectURL(file);
+    // Upload the file to the backend and get the backend-accessible file path
+    let backendFilePath = "";
+    try {
+      backendFilePath = await uploadVideo(file);
+    } catch (err) {
+      setIsUploading(false);
+      toast({
+        title: "Upload failed",
+        description: "There was an error uploading your video to the server.",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    const videoUrl = URL.createObjectURL(file);
     const video = document.createElement("video");
     video.src = videoUrl;
-    
     video.onloadedmetadata = () => {
       const newVideo: VideoAsset = {
         id: `upload-${Date.now()}`,
@@ -118,60 +132,55 @@ const AssetsIconBar = () => {
         duration: video.duration,
         uploaded: new Date(),
         src: videoUrl,
+        file_path: backendFilePath, // Store backend file path
       };
-
+      // Add to asset store
+      addAsset({
+        id: newVideo.id,
+        name: newVideo.name,
+        file_path: newVideo.file_path!,
+        duration: newVideo.duration,
+        // Add other metadata as needed
+      });
       setTimeout(() => {
         try {
           video.currentTime = 1;
-          
           video.onseeked = () => {
             const canvas = document.createElement("canvas");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext("2d");
             ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
             newVideo.thumbnail = canvas.toDataURL("image/jpeg");
-            
             setUploadedVideos(prev => [newVideo, ...prev]);
             setIsUploading(false);
-            
-            // Set as active video
             setActiveVideoAsset(newVideo);
             if (newVideo.src) {
               setVideoSrc(newVideo.src);
             }
-            
             toast({
               title: "Video uploaded",
               description: `${file.name} has been added to your assets`,
             });
-            
             setIsVideoDialogOpen(false);
           };
         } catch (error) {
           console.error("Error generating thumbnail:", error);
-          
           newVideo.thumbnail = "https://i.imgur.com/JcGrHtu.jpg";
           setUploadedVideos(prev => [newVideo, ...prev]);
           setIsUploading(false);
-          
-          // Set as active video
           setActiveVideoAsset(newVideo);
           if (newVideo.src) {
             setVideoSrc(newVideo.src);
           }
-          
           toast({
             title: "Video uploaded",
             description: `${file.name} has been added to your assets`,
           });
-          
           setIsVideoDialogOpen(false);
         }
       }, 500);
     };
-    
     video.onerror = () => {
       setIsUploading(false);
       toast({

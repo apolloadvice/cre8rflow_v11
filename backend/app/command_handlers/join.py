@@ -1,6 +1,6 @@
 import re
-from src.command_handlers.base import BaseCommandHandler
-from src.command_types import EditOperation
+from app.command_handlers.base import BaseCommandHandler
+from app.command_types import EditOperation
 
 ORDINALS = [
     "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ArrowUp, Bot } from "lucide-react";
 import { useCommand } from "@/hooks/useCommand";
+import { useEditorStore } from "@/store/editorStore";
 
 interface Message {
   id: string;
@@ -33,7 +34,9 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { executeCommand, isProcessing } = useCommand("current-project-id");
+  const { executeCommand, isProcessing, logs, error } = useCommand();
+  const clips = useEditorStore((state) => state.clips);
+  const setClips = useEditorStore((state) => state.setClips);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -56,29 +59,47 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
     setInput("");
     setIsThinking(true);
 
-    // Process the command with our hook
-    const result = await executeCommand(input);
-    
+    // Build the correct timeline structure for the backend
+    const timeline = {
+      tracks: [
+        {
+          track_type: "video",
+          clips: clips.map(clip => ({
+            ...(clip as any),
+            _type: (clip as any)._type || "VideoClip",
+            effects: (clip as any).effects || [],
+          })),
+        },
+      ],
+      frame_rate: 30.0,
+      version: "1.0",
+      transitions: [],
+    };
+
+    // Pass both input and timeline to executeCommand
+    const result = await executeCommand(input, timeline);
+
     setIsThinking(false);
-    
-    // If we have a processed video URL, send it to parent component
-    if (result?.videoUrl && onVideoProcessed) {
-      onVideoProcessed(result.videoUrl);
+
+    // Update clips if backend returns a new timeline with clips
+    if (result?.timeline?.tracks?.[0]?.clips) {
+      setClips(result.timeline.tracks[0].clips);
     }
-    
-    const responseContent = result?.videoUrl
-      ? `I've processed your video based on your request: "${input}". The edited video has replaced the original in the timeline.`
-      : result?.operations?.length 
-        ? `I've applied your edit request: ${result.operations.length} operations applied to your video.`
-        : "I processed your request but couldn't apply any edits.";
-      
+
+    // If we have a processed video URL, send it to parent component
+    // (No longer needed, as backend does not return videoUrl)
+
+    const responseContent = result?.message
+      ? result.message
+      : "I processed your request but couldn't apply any edits.";
+
     const responseMessage: Message = {
       id: (Date.now() + 1).toString(),
       content: responseContent,
       sender: "assistant",
       timestamp: new Date(),
     };
-    
+
     setMessages((prevMessages) => [...prevMessages, responseMessage]);
   };
 

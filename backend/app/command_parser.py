@@ -9,6 +9,7 @@ from app.command_handlers.add_text import AddTextCommandHandler
 from app.command_handlers.overlay import OverlayCommandHandler
 from app.command_handlers.fade import FadeCommandHandler
 from app.command_handlers.group_cut import GroupCutCommandHandler
+from app.command_handlers.remove import RemoveCommandHandler
 from app.utils import timestamp_to_frames
 import importlib
 
@@ -40,6 +41,7 @@ class CommandParser:
         self.register_handler(AddTextCommandHandler())
         self.register_handler(OverlayCommandHandler())
         self.register_handler(FadeCommandHandler())
+        self.register_handler(RemoveCommandHandler())
         # TODO: Register other handlers as they are refactored
         self.use_llm = use_llm
         # Import LLM parser only if needed (avoids dependency if not used)

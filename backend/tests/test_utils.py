@@ -1,5 +1,5 @@
 import pytest
-from src.utils import parse_natural_time_expression
+from app.utils import parse_natural_time_expression
 
 def test_parse_natural_time_expression_numeric():
     assert parse_natural_time_expression('30 seconds') == 30

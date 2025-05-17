@@ -1,5 +1,5 @@
 import pytest
-from src.command_parser import CommandParser
+from app.command_parser import CommandParser
 
 # Helper for frame conversion
 FRAME_RATE = 30

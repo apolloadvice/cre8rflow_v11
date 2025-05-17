@@ -1,6 +1,6 @@
-from src.command_parser import CommandParser
-from src.timeline import Timeline, VideoClip
-from src.command_executor import CommandExecutor
+from app.command_parser import CommandParser
+from app.timeline import Timeline, VideoClip
+from app.command_executor import CommandExecutor
 
 if __name__ == "__main__":
     # Initialize core components

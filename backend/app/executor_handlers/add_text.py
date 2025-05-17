@@ -1,6 +1,6 @@
-from src.executor_handlers.base import BaseOperationHandler
-from src.command_types import EditOperation
-from src.executor_types import ExecutionResult
+from app.executor_handlers.base import BaseOperationHandler
+from app.command_types import EditOperation
+from app.executor_types import ExecutionResult
 
 class AddTextOperationHandler(BaseOperationHandler):
     def can_handle(self, operation: EditOperation) -> bool:

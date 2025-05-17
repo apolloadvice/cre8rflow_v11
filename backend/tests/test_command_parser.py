@@ -1,5 +1,5 @@
 import pytest
-from src.command_parser import CommandParser, EditOperation
+from app.command_parser import CommandParser, EditOperation
 
 @pytest.fixture
 def parser():
@@ -91,7 +91,7 @@ def test_unknown_command(parser):
     assert "raw" in op.parameters
 
 def test_timeline_load_video():
-    from src.timeline import Timeline
+    from app.timeline import Timeline
     timeline = Timeline()
     clip = timeline.load_video("/videos/sample_video.mp4")
     assert clip.name == "sample_video"
@@ -100,7 +100,7 @@ def test_timeline_load_video():
     assert clip in timeline.get_track("video").clips
 
 def test_timeline_trim_clip():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     clip = VideoClip(name="clip1", start_frame=0, end_frame=600)  # 20s at 30fps
     timeline.add_clip(clip, track_index=0)
@@ -116,7 +116,7 @@ def test_timeline_trim_clip():
     assert video_clips[1].end == 600
 
 def test_timeline_join_clips():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     clip1 = VideoClip(name="clip1", start_frame=0, end_frame=300)
     clip2 = VideoClip(name="clip2", start_frame=300, end_frame=600)
@@ -132,7 +132,7 @@ def test_timeline_join_clips():
     assert joined_clip.end == 600
 
 def test_timeline_add_transition():
-    from src.timeline import Timeline
+    from app.timeline import Timeline
     timeline = Timeline()
     clip = timeline.load_video("/videos/sample_video.mp4")
     timeline.trim_clip(clip.name, 30.0)
@@ -421,7 +421,7 @@ def test_fade_command_negative(parser):
     assert op.type == "UNKNOWN"
 
 def test_timeline_trim_clip_audio():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add an audio clip to the audio track (track_type='audio', track_index=0)
     audio_clip = VideoClip(name="audio1", start_frame=0, end_frame=600)
@@ -438,7 +438,7 @@ def test_timeline_trim_clip_audio():
     assert audio_clips[1].end == 600
 
 def test_timeline_trim_clip_subtitle():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add a subtitle clip to the subtitle track (track_type='subtitle', track_index=0)
     subtitle_clip = VideoClip(name="subtitle1", start_frame=0, end_frame=240)
@@ -455,7 +455,7 @@ def test_timeline_trim_clip_subtitle():
     assert subtitle_clips[1].end == 240
 
 def test_timeline_trim_clip_effect():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add an effect clip to the effect track (track_type='effect', track_index=0)
     effect_clip = VideoClip(name="effect1", start_frame=0, end_frame=150)
@@ -472,7 +472,7 @@ def test_timeline_trim_clip_effect():
     assert effect_clips[1].end == 150
 
 def test_timeline_join_clips_audio():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add two adjacent audio clips to the audio track (track_type='audio', track_index=0)
     clip1 = VideoClip(name="audio1", start_frame=0, end_frame=300)
@@ -489,7 +489,7 @@ def test_timeline_join_clips_audio():
     assert joined_clip.end == 600
 
 def test_timeline_join_clips_subtitle():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add two adjacent subtitle clips to the subtitle track (track_type='subtitle', track_index=0)
     clip1 = VideoClip(name="subtitle1", start_frame=0, end_frame=120)
@@ -506,7 +506,7 @@ def test_timeline_join_clips_subtitle():
     assert joined_clip.end == 240
 
 def test_timeline_join_clips_effect():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add two adjacent effect clips to the effect track (track_type='effect', track_index=0)
     clip1 = VideoClip(name="effect1", start_frame=0, end_frame=75)
@@ -523,7 +523,7 @@ def test_timeline_join_clips_effect():
     assert joined_clip.end == 150
 
 def test_timeline_add_transition_audio():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add two adjacent audio clips to the audio track (track_type='audio', track_index=0)
     clip1 = VideoClip(name="audio1", start_frame=0, end_frame=300)
@@ -541,7 +541,7 @@ def test_timeline_add_transition_audio():
     assert t.duration == 2.0
 
 def test_timeline_add_transition_subtitle():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add two adjacent subtitle clips to the subtitle track (track_type='subtitle', track_index=0)
     clip1 = VideoClip(name="subtitle1", start_frame=0, end_frame=120)
@@ -559,7 +559,7 @@ def test_timeline_add_transition_subtitle():
     assert t.duration == 1.0
 
 def test_timeline_add_transition_effect():
-    from src.timeline import Timeline, VideoClip
+    from app.timeline import Timeline, VideoClip
     timeline = Timeline()
     # Add two adjacent effect clips to the effect track (track_type='effect', track_index=0)
     clip1 = VideoClip(name="effect1", start_frame=0, end_frame=75)
@@ -1048,7 +1048,7 @@ def test_fade_natural_time_expression(parser):
 def test_combined_commands(parser):
     # Expected use: two valid commands
     op = parser.parse_command("Cut clip1 at 00:30 and join with clip2", FRAME_RATE)
-    from src.command_types import CompoundOperation, EditOperation
+    from app.command_types import CompoundOperation, EditOperation
     assert isinstance(op, CompoundOperation)
     assert len(op.operations) == 2
     assert isinstance(op.operations[0], EditOperation)
@@ -1063,3 +1063,19 @@ def test_combined_commands(parser):
     # Failure case: only conjunction
     op3 = parser.parse_command("and join with clip2", FRAME_RATE)
     assert isinstance(op3, EditOperation) or isinstance(op3, CompoundOperation)
+
+def test_remove_command(parser):
+    op = parser.parse_command("remove clip1", FRAME_RATE)
+    assert op.type == "REMOVE"
+    assert op.target == "clip1"
+    op2 = parser.parse_command("delete clip2", FRAME_RATE)
+    assert op2.type == "REMOVE"
+    assert op2.target == "clip2"
+    op3 = parser.parse_command("erase clip3", FRAME_RATE)
+    assert op3.type == "REMOVE"
+    assert op3.target == "clip3"
+
+def test_remove_command_invalid(parser):
+    op = parser.parse_command("remove", FRAME_RATE)
+    assert op.type == "UNKNOWN"
+    assert "raw" in op.parameters

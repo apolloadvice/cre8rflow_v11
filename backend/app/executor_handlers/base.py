@@ -1,6 +1,6 @@
 import abc
-from src.command_types import EditOperation
-from src.executor_types import ExecutionResult
+from app.command_types import EditOperation
+from app.executor_types import ExecutionResult
 
 class BaseOperationHandler(abc.ABC):
     @abc.abstractmethod

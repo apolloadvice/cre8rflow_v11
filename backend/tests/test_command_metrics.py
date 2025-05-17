@@ -1,5 +1,5 @@
 import pytest
-from src.command_parser import CommandParser
+from app.command_parser import CommandParser
 
 # Labeled dataset: (command, expected_intent)
 INTENT_TEST_CASES = [

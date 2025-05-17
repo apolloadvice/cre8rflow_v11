@@ -1,8 +1,10 @@
 import pytest
-from src.command_parser import CommandParser
-from src.timeline import Timeline, VideoClip
-from src.command_executor import CommandExecutor
+from app.command_parser import CommandParser
+from app.timeline import Timeline, VideoClip
+from app.command_executor import CommandExecutor
 import copy
+from app.timeline import Timeline
+from app.command_executor import CommandHistory
 
 FRAME_RATE = 30  # Assume 30 fps for all tests
 
@@ -501,8 +503,8 @@ def test_command_history_save_to_file(tmp_path):
     assert "result" in entry0
 
 def test_command_history_load_from_file(tmp_path):
-    from src.timeline import Timeline
-    from src.command_executor import CommandHistory
+    from app.timeline import Timeline
+    from app.command_executor import CommandHistory
     parser = CommandParser()
     timeline = Timeline(frame_rate=FRAME_RATE)
     executor = CommandExecutor(timeline)

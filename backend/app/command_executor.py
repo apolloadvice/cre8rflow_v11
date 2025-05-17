@@ -1,17 +1,18 @@
 from typing import Any
-from src.timeline import Timeline, VideoClip
-from src.command_parser import EditOperation
-from src.executor_types import ExecutionResult
-from src.executor_handlers.cut import CutOperationHandler
-from src.executor_handlers.trim import TrimOperationHandler
-from src.executor_handlers.join import JoinOperationHandler
-from src.executor_handlers.add_text import AddTextOperationHandler
-from src.executor_handlers.overlay import OverlayOperationHandler
-from src.executor_handlers.fade import FadeOperationHandler
-from src.executor_handlers.group_cut import GroupCutOperationHandler
+from app.timeline import Timeline, VideoClip
+from app.command_parser import EditOperation
+from app.executor_types import ExecutionResult
+from app.executor_handlers.cut import CutOperationHandler
+from app.executor_handlers.trim import TrimOperationHandler
+from app.executor_handlers.join import JoinOperationHandler
+from app.executor_handlers.add_text import AddTextOperationHandler
+from app.executor_handlers.overlay import OverlayOperationHandler
+from app.executor_handlers.fade import FadeOperationHandler
+from app.executor_handlers.group_cut import GroupCutOperationHandler
+from app.executor_handlers.remove import RemoveOperationHandler
 import copy
 import time
-from src.utils import timestamp_to_frames
+from app.utils import timestamp_to_frames
 
 class CommandHistoryEntry:
     def __init__(self, command_text, operation, result, before_snapshot, after_snapshot, timestamp=None):
@@ -35,8 +36,8 @@ class CommandHistoryEntry:
     @staticmethod
     def from_dict(data, timeline_class):
         # Reconstruct operation and result as needed
-        from src.command_parser import EditOperation
-        from src.executor_types import ExecutionResult
+        from app.command_parser import EditOperation
+        from app.executor_types import ExecutionResult
         operation = EditOperation.from_dict(data["operation"]) if hasattr(EditOperation, 'from_dict') else data["operation"]
         result = ExecutionResult.from_dict(data["result"]) if hasattr(ExecutionResult, 'from_dict') else data["result"]
         before_snapshot = timeline_class.from_dict(data["before_snapshot"])
@@ -117,6 +118,7 @@ class CommandExecutor:
         self.register_handler(AddTextOperationHandler())
         self.register_handler(OverlayOperationHandler())
         self.register_handler(FadeOperationHandler())
+        self.register_handler(RemoveOperationHandler())
         # TODO: Register other handlers as they are refactored
 
     def register_handler(self, handler):

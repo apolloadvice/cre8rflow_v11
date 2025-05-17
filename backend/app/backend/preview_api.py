@@ -3,8 +3,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import tempfile
 import os
-from src.timeline import Timeline
-from src.video_backend.ffmpeg_pipeline import FFMpegPipeline
+from app.timeline import Timeline
+from app.video_backend.ffmpeg_pipeline import FFMpegPipeline
 
 router = APIRouter()
 

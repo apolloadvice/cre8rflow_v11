@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from src.timeline import Timeline
+from app.timeline import Timeline
 import subprocess
 
 class FFMpegPipeline:

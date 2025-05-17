@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
-from src.backend.main import app
-from src.timeline import Timeline, Transition, Effect, VideoClip
-from src.video_backend.ffmpeg_pipeline import FFMpegPipeline
+from app.backend.main import app
+from app.timeline import Timeline, Transition, Effect, VideoClip
+from app.video_backend.ffmpeg_pipeline import FFMpegPipeline
 
 client = TestClient(app)
 
@@ -253,7 +253,7 @@ def test_export_api_multiple_transitions(monkeypatch, tmp_path):
     """
     Test /api/export with a timeline containing multiple transitions. Should process without error (only first transition is used).
     """
-    from src.timeline import Transition
+    from app.timeline import Transition
     # Create three video files
     video_path1 = tmp_path / "video1.mp4"
     video_path2 = tmp_path / "video2.mp4"
@@ -293,7 +293,7 @@ def test_export_api_multiple_effects(monkeypatch, tmp_path):
     Test /api/export with a timeline containing a video clip with multiple effects (brightness and text overlay).
     Should process without error (only one effect is used, but should not error).
     """
-    from src.timeline import Effect
+    from app.timeline import Effect
     # Create a video file
     video_path = tmp_path / "video.mp4"
     video_path.write_text("")
@@ -328,7 +328,7 @@ def test_export_api_quality_parameter(monkeypatch, tmp_path):
     Test /api/export with different quality parameter values ("high", "medium", "low").
     Should pass the correct quality value to the pipeline.
     """
-    from src.timeline import Effect
+    from app.timeline import Effect
     # Create a video file
     video_path = tmp_path / "video.mp4"
     video_path.write_text("")
