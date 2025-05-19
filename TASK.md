@@ -250,3 +250,51 @@ Note: As of 2024-06-13, context awareness for TRIM and CUT is implemented and te
 
 # TODO (2024-06-10):
 - [2024-06-14] Monitor OpenAI API changes and update prompt/response handling as needed for continued compatibility.
+
+## 12. Workflow Gaps and Required Actions (2024-06-14)
+
+### 12.1 Asset Management
+- [ ] Implement persistent asset storage (database or local storage)
+- [ ] Extract and store video metadata (duration, resolution, format) on upload
+- [ ] Display asset metadata in the UI
+
+### 12.2 Timeline Placement
+- [ ] Implement reliable drag-and-drop from asset panel to timeline
+- [ ] On drop, create a timeline clip with correct duration and metadata
+- [ ] Visually scale timeline clips based on video duration
+- [ ] Prevent overlapping clips on the same track
+
+### 12.3 NLP Command System
+- [ ] Integrate a robust NLP parser (spaCy, GPT, or similar)
+- [ ] Improve command-to-action mapping (connect parser output to timeline operations)
+- [ ] Add error handling and user feedback for invalid/ambiguous commands
+- [ ] Display step-by-step feedback or "thinking" indicator during command processing
+
+### 12.4 Edit Application & Real-Time Update
+- [ ] Implement timeline data updates for edits (e.g., cut, trim, split)
+- [ ] Integrate video processing backend (FFmpeg, WASM, or similar)
+- [ ] Update video playback and timeline UI in real-time after edits
+
+### 12.5 User Feedback & Error Handling
+- [ ] Add visible processing indicators (spinner, progress bar, etc.)
+- [ ] Show confirmation and error messages for all user actions
+- [ ] Highlight affected timeline segments after edits
+
+### 12.6 Testing & Validation
+- [ ] Add unit/integration tests for asset upload, timeline placement, NLP parsing, and edit application
+- [ ] Add edge/failure case tests for all new features
+
+### 12.7 Discovered During Work: Architectural Improvements
+- [ ] Implement central state management for UI/backend sync
+- [ ] Add asynchronous processing for video edits to avoid UI blocking
+
+### 12.8 Summary Table of Gaps and Required Actions
+| Workflow Step         | Current State         | Required Action(s)                                      |
+|---------------------- |----------------------|---------------------------------------------------------|
+| Asset Upload          | UI exists, no metadata, not persistent | Add metadata extraction, persistent storage             |
+| Timeline Placement    | UI exists, drag-and-drop incomplete   | Implement drag-and-drop, create clips with metadata     |
+| NLP Command           | Input exists, parser basic            | Integrate robust NLP, map to timeline actions           |
+| Processing Feedback   | None                 | Add "thinking" indicator, step-by-step feedback         |
+| Edit Application      | Not functional       | Implement timeline data updates, integrate video backend|
+| Real-Time Update      | Not functional       | Sync timeline/video UI after edits, real-time preview   |
+| Error Handling/UX     | Minimal              | Add error/confirmation messages, highlight changes      |

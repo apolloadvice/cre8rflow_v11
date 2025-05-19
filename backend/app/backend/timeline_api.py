@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from app.command_parser import CommandParser
 from app.command_executor import CommandExecutor
 from app.timeline import Timeline
+from .command_api import save_timeline_to_db
 
 router = APIRouter()
 
@@ -66,6 +67,13 @@ class GroupCutRequest(BaseModel):
     target_type: str
     timestamp: str
     track_type: str = "video"
+
+class TimelineSaveRequest(BaseModel):
+    asset_path: str
+    timeline: dict
+
+class TimelineSaveResponse(BaseModel):
+    status: str
 
 # In-memory timeline for demo (replace with persistent storage as needed)
 timeline = Timeline()
@@ -218,4 +226,12 @@ def group_cut(req: GroupCutRequest):
         "success": result.success,
         "message": result.message,
         "timeline": timeline.to_dict()
-    } 
+    }
+
+@router.post("/timeline/save", response_model=TimelineSaveResponse)
+async def save_timeline(payload: TimelineSaveRequest):
+    try:
+        save_timeline_to_db(payload.asset_path, payload.timeline)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) 

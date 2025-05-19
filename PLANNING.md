@@ -1,36 +1,48 @@
 # NLP Video Editor Project Planning
 
-## Current Status (2024-06-10)
-- Core data structures (timeline, tracks, clips, effects, transitions) are robust, extensible, and fully tested.
-- Compound/nested clips are supported, with recursive timeline operations (trim, join, remove, move, transitions).
-- Serialization/deserialization is robust, versioned, and extensible (supports custom subclasses).
-- Command parsing, validation, and execution are robust and tested for all major command types.
-- **Parser and executor are now fully extensible and handler/plugin-based (2024-06-11).**
-- **Group/compound (batch) operations (e.g., group cut) are now implemented and tested (2024-06-11).**
-- **Planned:** Improved natural language flexibility, referencing by content/position, and user-facing features (UI, undo/redo, batch/group operations).
+## Current Status (2024-06-14)
+- UI components for asset upload, timeline, and command input are present but not fully connected.
+- Asset upload lacks persistent storage and metadata extraction (duration, resolution, etc.).
+- Timeline drag-and-drop is incomplete; timeline does not visually represent clip duration or allow proper placement.
+- Command parsing is basic; lacks robust NLP, error handling, and feedback.
+- No visible processing feedback or step-by-step user guidance.
+- Edits are not actually applied to timeline data or video; no real video processing or timeline update.
+- Timeline and video playback do not update after edits; no real-time preview of changes.
+- Minimal error/confirmation messages; no user guidance for failed or ambiguous actions.
 
-## Roadmap & Next Steps (2024-06-11)
-- Improve natural language flexibility and context understanding
-  - Planned basic NLP enhancements for MVP:
-    - Command synonyms/variations (e.g., "split", "divide", "slice" for "cut")
-    - Natural references (e.g., "this clip", "the clip before that one")
-    - Context awareness (e.g., "now trim it")
-    - MOVE command support (context-aware, e.g., "move that to the end", "move it to the next track")
-    - Natural time expressions (e.g., "thirty seconds", "halfway through")
-    - Combined commands (e.g., "cut and join")
-  - **Experimental: Integrate LLM (GPT) for NLP command parsing (OpenAI API, fallback to pattern-based parsing)**
-- **Planned: Implement ffmpeg-based export/rendering pipeline for timeline (primary backend for video processing)**
-  - All timeline operations (cut, trim, join, transitions, text, etc.) will be rendered using ffmpeg for speed and flexibility
-  - MoviePy is optional and can be used for prototyping or preview only
-- Add referencing by content/position (e.g., "last clip", "clip with music")
-- Develop user-facing features: UI, undo/redo, batch/group operations, timeline visualization
+## Limitations (2024-06-14)
+- Workflow is incomplete: user can upload a video and type a command, but cannot fully realize the described editing scenario.
+- Missing metadata and drag-and-drop support stop the flow early.
+- NLP command parsing is rudimentary, limiting understanding of user instructions.
+- No visible feedback during processing, making the system feel unresponsive.
+- Edits are not actually applied, so the video and timeline don't update as expected.
 
-## Current User-Facing Limitations
-- Pattern-based command parsing (not true semantic NLP yet; LLM-based parsing is experimental)
-- Limited natural language flexibility (commands must follow specific patterns unless using LLM)
-- No support for referencing clips by content or position
-- No custom effect/transition creation via natural language
-- Limited error recovery and suggestions
+## Roadmap & Next Steps (2024-06-14)
+- Implement persistent asset management and metadata extraction
+- Complete drag-and-drop and timeline clip creation with correct scaling
+- Integrate robust NLP parser and map commands to timeline actions
+- Add user feedback mechanisms (processing, confirmation, error)
+- Implement timeline data updates and video processing backend
+- Enable real-time timeline and video updates after edits
+- Improve error handling and user guidance throughout the app
+- Implement central state management for UI/backend sync
+- Add asynchronous processing for video edits to avoid UI blocking
+
+## UX/Feedback & Architectural Challenges (2024-06-14)
+- Need for asynchronous processing for video edits (to avoid UI blocking)
+- Centralized state management for UI and backend sync
+- Error handling and user guidance for ambiguous or failed actions
+- Step-by-step feedback, confirmation dialogs, and error messages as core UX features
+
+## Intended End-to-End Workflow (2024-06-14)
+1. Asset Upload: User uploads a video to an asset library; system extracts and stores metadata (duration, resolution, etc.).
+2. Timeline Placement: User drags and drops video onto a timeline track, creating a clip with correct duration.
+3. NLP Command: User enters a natural-language command (e.g., "cut from 00:05 to 00:10").
+4. Processing Feedback: System provides visible feedback (e.g., "thinking...", step-by-step interpretation).
+5. Apply Edit: Edit is applied to the timeline and video.
+6. Real-Time Update: Timeline and video playback update immediately to reflect the edit.
+
+**Current State:** Steps 1-3 are partially present (UI only); steps 4-6 are not functional.
 
 ## Project Overview
 

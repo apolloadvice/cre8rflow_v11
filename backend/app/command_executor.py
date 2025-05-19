@@ -210,6 +210,10 @@ class CommandExecutor:
         frame_rate = self.timeline.frame_rate
         # Reference resolution for positional/named/ordinal references
         reference_type = operation.parameters.get("reference_type")
+        # --- NEW: Extract clip_id(s) from parameters if present ---
+        clip_id = operation.parameters.get("clip_id")
+        second_clip_id = operation.parameters.get("second_clip_id")
+        # ---
         if reference_type and operation.target:
             track_type = operation.parameters.get("track_type", "video")
             ordinal = operation.parameters.get("ordinal")
@@ -225,6 +229,11 @@ class CommandExecutor:
                 return result
             new_params = {k: v for k, v in operation.parameters.items() if k not in ["reference_type", "ordinal", "ref_track_type"]}
             operation = EditOperation(type_=operation.type, target=resolved_name, parameters=new_params)
+        # ---
+        # Pass clip_id(s) to handlers via operation.parameters
+        operation.parameters["clip_id"] = clip_id
+        if second_clip_id:
+            operation.parameters["second_clip_id"] = second_clip_id
         for handler in self.handlers:
             if handler.can_handle(operation):
                 result = handler.execute(operation, self)
