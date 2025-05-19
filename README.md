@@ -10,31 +10,51 @@ This project is an NLP-based video editing tool that allows users to edit videos
 - **Parser and executor are now fully extensible and handler/plugin-based (2024-06-11).**
 - **Group/compound (batch) operations (e.g., group cut) are now implemented and tested (2024-06-11).**
 
-## Features
-- Parse natural language commands (e.g., "Cut clip1 at 00:30")
-- Represent video/audio clips on a timeline (with support for compound/nested clips)
-- **Apply effects to individual clips or globally/range-based via the Effects track**
-- Map parsed commands to timeline operations (all operations work recursively)
-- Modular Python codebase for easy extension (custom clips, effects, transitions)
-- Robust, versioned JSON serialization/deserialization
-- **Extensible command parser and executor (plugin/handler-based, easy addition of new command types, effects, transitions) (2024-06-11)**
-- **Advanced/nested command support (e.g., group/batch operations like "cut all clips at 30s") is implemented and tested (2024-06-11)**
-- **Command history, undo/redo, and session persistence (save/load) are implemented and fully tested (2024-06-12)**
-- **Planned: Basic NLP enhancements for MVP:**
-  - Command synonyms/variations (e.g., "split"/"divide"/"slice" for "cut")
-  - Natural references (e.g., "this clip", "the clip before that one")
-  - Context awareness (e.g., "now trim it")
-  - MOVE command support (context-aware, e.g., "move that to the end", "move it to the next track")
-  - Natural time expressions (e.g., "thirty seconds", "halfway through")
-  - Combined commands (e.g., "cut and join")
-- **Experimental: LLM (GPT) integration for NLP command parsing**
-  - Use OpenAI API to parse and interpret natural language commands
-  - Fallback to pattern-based parsing if LLM is ambiguous or fails
-- **Planned: ffmpeg-based export/rendering pipeline for actual video editing**
-  - All timeline operations (cut, trim, join, transitions, text, etc.) will be rendered using ffmpeg for speed and flexibility
-  - MoviePy is optional and can be used for prototyping or preview only
-- All timeline operations (cut, trim, join, transitions, effects) are supported in both preview and export flows.
-- **Effects can be applied per-clip or globally/range-based via the Effects track. Timeline/range-based effects are supported and composable.**
+## Current Gaps & Limitations (2024-06-14)
+- **Asset Upload:** No persistent asset storage; missing metadata extraction (duration, resolution, etc.).
+- **Timeline Placement:** Drag-and-drop is incomplete; timeline does not visually represent clip duration or allow proper placement.
+- **NLP Command:** Command parsing is basic; lacks robust NLP, error handling, and feedback.
+- **Processing Feedback:** No visible "thinking" or step-by-step feedback for users.
+- **Edit Application:** Edits are not actually applied to timeline data or video; no real video processing or timeline update.
+- **Real-Time Update:** Timeline and video playback do not update after edits; no real-time preview of changes.
+- **Error Handling & UX:** Minimal error/confirmation messages; no user guidance for failed or ambiguous actions.
+
+## Features (Implemented, Partial, Planned)
+- **Implemented:**
+  - UI components for asset upload, timeline, and command input (not fully connected)
+  - Core timeline data structures (tracks, clips, effects, transitions)
+  - Command parser and executor scaffolding
+  - JSON serialization/deserialization
+- **Partially Implemented:**
+  - Asset upload UI (no metadata extraction or persistence)
+  - Timeline UI (drag-and-drop and clip creation incomplete)
+  - Command input and parsing (basic pattern matching only)
+- **Planned:**
+  - Persistent asset management and metadata extraction
+  - Functional drag-and-drop and timeline clip creation
+  - Robust NLP command parsing and mapping
+  - User feedback mechanisms (processing, confirmation, error)
+  - Real-time timeline and video updates after edits
+  - Integration of video processing backend
+
+## Intended End-to-End Workflow
+1. **Asset Upload:** User uploads a video to an asset library; system extracts and stores metadata (duration, resolution, etc.).
+2. **Timeline Placement:** User drags and drops video onto a timeline track, creating a clip with correct duration.
+3. **NLP Command:** User enters a natural-language command (e.g., "cut from 00:05 to 00:10").
+4. **Processing Feedback:** System provides visible feedback (e.g., "thinking...", step-by-step interpretation).
+5. **Apply Edit:** Edit is applied to the timeline and video.
+6. **Real-Time Update:** Timeline and video playback update immediately to reflect the edit.
+
+**Current State:** Steps 1-3 are partially present (UI only); steps 4-6 are not functional.
+
+## Next Steps / Roadmap (2024-06-14)
+- Implement persistent asset storage and metadata extraction
+- Complete drag-and-drop and timeline clip creation with correct scaling
+- Integrate robust NLP parser and map commands to timeline actions
+- Add user feedback mechanisms (processing, confirmation, error)
+- Implement timeline data updates and video processing backend
+- Enable real-time timeline and video updates after edits
+- Improve error handling and user guidance throughout the app
 
 ## User Flow: Edit → Timeline Update → Preview → Export
 

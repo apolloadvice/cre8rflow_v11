@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useToast } from "./use-toast";
-import { sendCommand, CommandRequest, CommandResponse } from "../api/apiClient";
+import { sendCommand } from "@/api/apiClient";
+import { useEditorStore } from "@/store/editorStore";
 
 export interface Operation {
   start_sec: number;
@@ -20,16 +21,22 @@ export const useCommand = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { activeVideoAsset } = useEditorStore();
 
-  const executeCommand = async (commandText: string, timeline: any) => {
+  const executeCommand = async (commandText: string, timeline?: any) => {
     if (!commandText.trim()) return null;
     setIsProcessing(true);
     setError(null);
     setLogs([]);
     setLastResult(null);
 
+    const assetPath = activeVideoAsset?.file_path;
+    if (!assetPath || typeof assetPath !== "string") {
+      throw new Error("No valid video asset selected");
+    }
+
     try {
-      const res = await sendCommand({ command: commandText, timeline });
+      const res = await sendCommand(assetPath, commandText);
       setLastResult(res.data);
       setLogs(res.data.logs || []);
       return res.data;

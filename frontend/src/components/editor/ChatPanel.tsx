@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { ArrowUp, Bot } from "lucide-react";
 import { useCommand } from "@/hooks/useCommand";
 import { useEditorStore } from "@/store/editorStore";
+import { sendCommand } from "@/api/apiClient";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Message {
   id: string;
@@ -37,6 +39,8 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
   const { executeCommand, isProcessing, logs, error } = useCommand();
   const clips = useEditorStore((state) => state.clips);
   const setClips = useEditorStore((state) => state.setClips);
+  const { activeVideoAsset, setActiveVideoAsset } = useEditorStore();
+  const { toast } = useToast();
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -59,48 +63,56 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
     setInput("");
     setIsThinking(true);
 
-    // Build the correct timeline structure for the backend
-    const timeline = {
-      tracks: [
-        {
-          track_type: "video",
-          clips: clips.map(clip => ({
-            ...(clip as any),
-            _type: (clip as any)._type || "VideoClip",
-            effects: (clip as any).effects || [],
-          })),
-        },
-      ],
-      frame_rate: 30.0,
-      version: "1.0",
-      transitions: [],
-    };
-
-    // Pass both input and timeline to executeCommand
-    const result = await executeCommand(input, timeline);
-
-    setIsThinking(false);
-
-    // Update clips if backend returns a new timeline with clips
-    if (result?.timeline?.tracks?.[0]?.clips) {
-      setClips(result.timeline.tracks[0].clips);
+    // Ensure we pass only the file_path string
+    const assetPath = activeVideoAsset?.file_path;
+    console.log("activeVideoAsset", activeVideoAsset);
+    console.log("file_path", activeVideoAsset?.file_path, typeof activeVideoAsset?.file_path);
+    if (!assetPath || typeof assetPath !== "string" || assetPath.length < 5) {
+      toast({ variant: "destructive", description: "No valid video selected or uploaded." });
+      setIsThinking(false);
+      return;
     }
+    try {
+      const response = await sendCommand(assetPath, input);
+      toast({ description: "Edit applied ✔️" });
 
-    // If we have a processed video URL, send it to parent component
-    // (No longer needed, as backend does not return videoUrl)
-
-    const responseContent = result?.message
-      ? result.message
-      : "I processed your request but couldn't apply any edits.";
-
-    const responseMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      content: responseContent,
-      sender: "assistant",
-      timestamp: new Date(),
-    };
-
-    setMessages((prevMessages) => [...prevMessages, responseMessage]);
+      // Update timeline state and UI with backend response
+      if (response && response.timeline) {
+        const newClips = [];
+        const frameRate = response.timeline.frame_rate || 30;
+        for (const track of response.timeline.tracks) {
+          // Map track_type string to track index (optional, or keep as string)
+          const trackType = track.track_type;
+          for (const clip of track.clips) {
+            newClips.push({
+              id: clip.clip_id || clip.id || clip.name, // prefer clip_id
+              start: typeof clip.start === 'number' ? clip.start / frameRate : 0,
+              end: typeof clip.end === 'number' ? clip.end / frameRate : 0,
+              track: typeof trackType === 'number' ? trackType : undefined, // or map to index if needed
+              type: clip.type || trackType,
+              name: clip.name,
+              file_path: clip.file_path,
+            });
+          }
+        }
+        setClips(newClips);
+      }
+    } catch (err: any) {
+      let message = "Unknown error";
+      if (err?.response?.data?.detail) {
+        if (Array.isArray(err.response.data.detail)) {
+          message = err.response.data.detail.map((d: any) => d.msg).join(", ");
+        } else {
+          message = err.response.data.detail;
+        }
+      } else if (err?.message) {
+        message = err.message;
+      } else {
+        message = JSON.stringify(err);
+      }
+      toast({ variant: "destructive", description: message });
+    }
+    setIsThinking(false);
   };
 
   const handleQuickAction = (action: string) => {

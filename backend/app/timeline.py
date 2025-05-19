@@ -3,6 +3,8 @@ import os
 from enum import Enum
 import json
 from abc import ABC, abstractmethod
+import uuid
+import logging
 
 class TrackType(Enum):
     VIDEO = "video"
@@ -44,7 +46,8 @@ class VideoClip(BaseClip):
     Represents a video or audio clip on the timeline.
     start and end are in frames (integer), not seconds.
     """
-    def __init__(self, name: str, start_frame: int, end_frame: int, track_type: str = "video", file_path: Optional[str] = None):
+    def __init__(self, name: str, start_frame: int, end_frame: int, track_type: str = "video", file_path: Optional[str] = None, clip_id: Optional[str] = None):
+        self.clip_id: str = clip_id or str(uuid.uuid4())
         self.name: str = name
         self.start: int = int(start_frame)  # in frames
         self.end: int = int(end_frame)      # in frames
@@ -86,6 +89,7 @@ class VideoClip(BaseClip):
         """
         return {
             "_type": self.__class__.__name__,
+            "clip_id": self.clip_id,
             "name": self.name,
             "start": self.start,
             "end": self.end,
@@ -110,7 +114,8 @@ class VideoClip(BaseClip):
             start_frame=data["start"],
             end_frame=data["end"],
             track_type=data.get("track_type", "video"),
-            file_path=data.get("file_path")
+            file_path=data.get("file_path"),
+            clip_id=data.get("clip_id")
         )
         clip.effects = [Effect.from_dict(e) for e in data.get("effects", [])]
         return clip
@@ -127,7 +132,7 @@ class CompoundClip(BaseClip):
     A clip that contains other clips (including other CompoundClips), allowing for grouped/nested editing.
     start and end are in frames (integer), and always reflect the bounds of all contained clips.
     """
-    def __init__(self, name: str, start_frame: int, end_frame: int, track_type: str = "video", clips: Optional[list] = None):
+    def __init__(self, name: str, start_frame: int, end_frame: int, track_type: str = "video", clips: Optional[list] = None, clip_id: Optional[str] = None):
         """
         Initialize a CompoundClip.
         Args:
@@ -137,6 +142,7 @@ class CompoundClip(BaseClip):
             track_type (str): Track type (e.g., 'video', 'audio')
             clips (Optional[list]): List of BaseClip instances to include
         """
+        self.clip_id: str = clip_id or str(uuid.uuid4())
         self.name = name
         self.start = int(start_frame)
         self.end = int(end_frame)
@@ -226,6 +232,7 @@ class CompoundClip(BaseClip):
         """
         return {
             "_type": self.__class__.__name__,
+            "clip_id": self.clip_id,
             "name": self.name,
             "start": self.start,
             "end": self.end,
@@ -255,7 +262,8 @@ class CompoundClip(BaseClip):
             start_frame=data["start"],
             end_frame=data["end"],
             track_type=data.get("track_type", "video"),
-            clips=clips
+            clips=clips,
+            clip_id=data.get("clip_id")
         )
         compound.effects = [Effect.from_dict(e) for e in data.get("effects", [])]
         return compound
@@ -600,63 +608,96 @@ class Timeline:
         for top in track.clips:
             update_recursive(top, parent_list)
 
-    def trim_clip(self, clip_name: str, timestamp: float, track_type: str = "video", track_index: int = 0) -> bool:
+    def _find_clip_recursive_by_id(self, clips, target_id):
+        """
+        Recursively search for a clip by clip_id in a list of clips (including inside CompoundClip).
+        Returns (parent_container, index, clip) for the first match, or (None, None, None) if not found.
+        parent_container is the list (track.clips or compound.clips) containing the found clip.
+        """
+        for i, clip in enumerate(clips):
+            if getattr(clip, 'clip_id', None) == target_id:
+                return (clips, i, clip)
+            if isinstance(clip, CompoundClip):
+                found = self._find_clip_recursive_by_id(clip.clips, target_id)
+                if found[2] is not None:
+                    return found
+        return (None, None, None)
+
+    def _find_clip_recursive(self, clips, target_name=None, target_id=None):
+        """
+        Recursively search for a clip by name or clip_id in a list of clips (including inside CompoundClip).
+        Returns (parent_container, index, clip) for the first match, or (None, None, None) if not found.
+        parent_container is the list (track.clips or compound.clips) containing the found clip.
+        """
+        if target_id is not None:
+            return self._find_clip_recursive_by_id(clips, target_id)
+        for i, clip in enumerate(clips):
+            if getattr(clip, 'name', None) == target_name:
+                return (clips, i, clip)
+            if isinstance(clip, CompoundClip):
+                found = self._find_clip_recursive(clip.clips, target_name)
+                if found[2] is not None:
+                    return found
+        return (None, None, None)
+
+    def trim_clip(self, clip_name: str = None, timestamp: float = None, track_type: str = "video", track_index: int = 0, clip_id: str = None) -> bool:
         """
         Trim (cut) a clip at the given timestamp, splitting it into two clips.
         Now supports recursively finding the clip inside nested CompoundClips.
-
         Args:
             clip_name (str): Name of the clip to trim
+            clip_id (str): ID of the clip to trim (preferred if provided)
             timestamp (float): Time in seconds to cut at
             track_type (str): Type of track (e.g., 'video', 'audio', etc.)
             track_index (int): Track index to search for the clip
-
         Returns:
             bool: True if the clip was trimmed, False if not found or invalid
         """
         track = self.get_track(track_type, track_index)
-        parent, idx, clip = self._find_clip_recursive(track.clips, clip_name)
+        logging.debug(f"[trim_clip] BEFORE: {[{'name': c.name, 'start': c.start, 'end': c.end, 'clip_id': getattr(c, 'clip_id', None)} for c in track.clips]}")
+        parent, idx, clip = self._find_clip_recursive(track.clips, target_name=clip_name, target_id=clip_id)
         if clip is not None and clip.start < timestamp < clip.end:
             duration1 = timestamp - clip.start
             duration2 = clip.end - timestamp
-            first = type(clip)(name=clip.name + "_part1", start_frame=clip.start, end_frame=clip.start + duration1)
-            second = type(clip)(name=clip.name + "_part2", start_frame=timestamp, end_frame=timestamp + duration2)
+            first = type(clip)(name=clip.name + "_part1", start_frame=clip.start, end_frame=clip.start + duration1, clip_id=str(uuid.uuid4()))
+            second = type(clip)(name=clip.name + "_part2", start_frame=timestamp, end_frame=timestamp + duration2, clip_id=str(uuid.uuid4()))
             parent.pop(idx)
             parent.insert(idx, second)
             parent.insert(idx, first)
             self._update_ancestor_bounds(track, parent)
             self._notify_change()
+            logging.debug(f"[trim_clip] AFTER: {[{'name': c.name, 'start': c.start, 'end': c.end, 'clip_id': getattr(c, 'clip_id', None)} for c in track.clips]}")
             return True
+        logging.warning(f"[trim_clip] No cut performed: clip_name={clip_name}, clip_id={clip_id}, timestamp={timestamp}, found_clip={clip is not None}, clip_range=({getattr(clip, 'start', None)}, {getattr(clip, 'end', None)})")
         return False
 
-    def join_clips(self, first_clip_name: str, second_clip_name: str, track_type: str = "video", track_index: int = 0) -> bool:
+    def join_clips(self, first_clip_name: str = None, second_clip_name: str = None, track_type: str = "video", track_index: int = 0, first_clip_id: str = None, second_clip_id: str = None) -> bool:
         """
         Join two adjacent clips into a single clip by merging their time ranges and names.
         Now supports recursively finding the clips inside nested CompoundClips.
-
         Args:
             first_clip_name (str): Name of the first clip
             second_clip_name (str): Name of the second (must be immediately after the first)
+            first_clip_id (str): ID of the first clip (preferred if provided)
+            second_clip_id (str): ID of the second clip (preferred if provided)
             track_type (str): Type of track (e.g., 'video', 'audio', etc.)
             track_index (int): Track index to search for the clips
-
         Returns:
             bool: True if the clips were joined, False if not found or not adjacent
         """
         track = self.get_track(track_type, track_index)
-        # Find first clip
-        parent, idx, first = self._find_clip_recursive(track.clips, first_clip_name)
+        parent, idx, first = self._find_clip_recursive(track.clips, target_name=first_clip_name, target_id=first_clip_id)
         if first is not None and idx is not None and idx + 1 < len(parent):
             second = parent[idx + 1]
-            if getattr(second, 'name', None) == second_clip_name:
+            if (second_clip_id and getattr(second, 'clip_id', None) == second_clip_id) or (not second_clip_id and getattr(second, 'name', None) == second_clip_name):
                 if abs(first.end - second.start) < 1e-6:
                     joined_name = f"{first.name}_joined_{second.name}"
                     joined_clip = type(first)(
                         name=joined_name,
                         start_frame=first.start,
-                        end_frame=second.end
+                        end_frame=second.end,
+                        clip_id=str(uuid.uuid4())
                     )
-                    # Replace the two clips with the joined clip
                     parent.pop(idx + 1)
                     parent.pop(idx)
                     parent.insert(idx, joined_clip)
@@ -665,28 +706,28 @@ class Timeline:
                     return True
         return False
 
-    def add_transition(self, from_clip_name: str, to_clip_name: str, transition_type: str = "crossfade", duration: float = 1.0, track_type: str = "video", track_index: int = 0) -> bool:
+    def add_transition(self, from_clip_name: str = None, to_clip_name: str = None, transition_type: str = "crossfade", duration: float = 1.0, track_type: str = "video", track_index: int = 0, from_clip_id: str = None, to_clip_id: str = None) -> bool:
         """
         Add a transition between two adjacent clips, even if nested inside CompoundClips.
-
         Args:
             from_clip_name (str): Name of the first (outgoing) clip
             to_clip_name (str): Name of the second (incoming) clip
+            from_clip_id (str): ID of the first clip (preferred if provided)
+            to_clip_id (str): ID of the second clip (preferred if provided)
             transition_type (str): Type of transition (e.g., 'crossfade')
             duration (float): Duration of the transition in seconds
             track_type (str): Type of track (e.g., 'video', 'audio', etc.)
             track_index (int): Track index to search for the clips
-
         Returns:
             bool: True if the transition was added, False if clips not found or not adjacent
         """
         track = self.get_track(track_type, track_index)
-        parent, idx, first = self._find_clip_recursive(track.clips, from_clip_name)
+        parent, idx, first = self._find_clip_recursive(track.clips, target_name=from_clip_name, target_id=from_clip_id)
         if first is not None and idx is not None and idx + 1 < len(parent):
             second = parent[idx + 1]
-            if getattr(second, 'name', None) == to_clip_name:
+            if (to_clip_id and getattr(second, 'clip_id', None) == to_clip_id) or (not to_clip_id and getattr(second, 'name', None) == to_clip_name):
                 if abs(first.end - second.start) < 1e-6:
-                    transition = Transition(from_clip=from_clip_name, to_clip=to_clip_name, transition_type=transition_type, duration=duration)
+                    transition = Transition(from_clip=from_clip_name or from_clip_id, to_clip=to_clip_name or to_clip_id, transition_type=transition_type, duration=duration)
                     self.transitions.append(transition)
                     self._notify_change()
                     return True
@@ -702,13 +743,13 @@ class Timeline:
             raise IndexError(f"No track of type {track_type} at index {index}")
         return matches[index]
 
-    def remove_clip(self, clip_name: str, track_type: str = "video", track_index: int = 0) -> bool:
+    def remove_clip(self, clip_name: str = None, track_type: str = "video", track_index: int = 0, clip_id: str = None) -> bool:
         """
-        Remove the first clip with the given name from the specified track (recursively, including inside CompoundClips).
+        Remove the first clip with the given name or clip_id from the specified track (recursively, including inside CompoundClips).
         Returns True if removed, False if not found.
         """
         track = self.get_track(track_type, track_index)
-        parent, idx, clip = self._find_clip_recursive(track.clips, clip_name)
+        parent, idx, clip = self._find_clip_recursive(track.clips, target_name=clip_name, target_id=clip_id)
         if clip is not None:
             parent.pop(idx)
             self._update_ancestor_bounds(track, parent)
@@ -741,19 +782,20 @@ class Timeline:
 
     def move_clip(
         self,
-        clip_name: str,
+        clip_name: str = None,
         source_track_type: str = "video",
         source_track_index: int = 0,
         dest_track_type: str = "video",
         dest_track_index: int = 0,
-        dest_position: float = None
+        dest_position: float = None,
+        clip_id: str = None
     ) -> bool:
         """
-        Move a clip by name from one track (or nested compound) to another (or to a different position in the same track).
+        Move a clip by name or clip_id from one track (or nested compound) to another (or to a different position in the same track).
         Returns True if moved, False if not found.
         """
         source_track = self.get_track(source_track_type, source_track_index)
-        parent, idx, clip = self._find_clip_recursive(source_track.clips, clip_name)
+        parent, idx, clip = self._find_clip_recursive(source_track.clips, target_name=clip_name, target_id=clip_id)
         if clip is not None:
             # Remove from source
             clip_to_move = parent.pop(idx)
@@ -864,21 +906,6 @@ class Timeline:
         """
         data = json.loads(json_str)
         return Timeline.from_dict(data)
-
-    def _find_clip_recursive(self, clips, target_name):
-        """
-        Recursively search for a clip by name in a list of clips (including inside CompoundClip).
-        Returns (parent_container, index, clip) for the first match, or (None, None, None) if not found.
-        parent_container is the list (track.clips or compound.clips) containing the found clip.
-        """
-        for i, clip in enumerate(clips):
-            if getattr(clip, 'name', None) == target_name:
-                return (clips, i, clip)
-            if isinstance(clip, CompoundClip):
-                found = self._find_clip_recursive(clip.clips, target_name)
-                if found[2] is not None:
-                    return found
-        return (None, None, None)
 
     def get_all_clips(self, track_type: str = "video") -> list:
         """

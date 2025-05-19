@@ -10,6 +10,7 @@ export interface CutClipRequest {
   clip_name: string;
   timestamp: string;
   track_type?: string;
+  clip_id?: string;
 }
 
 export interface TimelineResponse {
@@ -26,17 +27,21 @@ export interface TrimClipRequest {
   clip_name: string;
   timestamp: string;
   track_type?: string;
+  clip_id?: string;
 }
 
 export interface JoinClipsRequest {
   first_clip_name: string;
   second_clip_name: string;
   track_type?: string;
+  clip_id?: string;
+  second_clip_id?: string;
 }
 
 export interface RemoveClipRequest {
   clip_name: string;
   track_type?: string;
+  clip_id?: string;
 }
 
 export interface AddTextRequest {
@@ -142,8 +147,17 @@ export const exportVideo = (payload: PreviewExportRequest, quality: 'high' | 'me
 
 // Expand with additional endpoints as needed
 
-export const sendCommand = (payload: CommandRequest) =>
-  axios.post<CommandResponse>(API_BASE_URL + '/command', payload);
+export async function sendCommand(asset_path: string, command: string) {
+  // Defensive check
+  if (typeof asset_path !== "string") {
+    console.error("sendCommand: asset_path is not a string!", asset_path, typeof asset_path);
+    throw new Error("asset_path must be a string");
+  }
+  const payload = { asset_path, command };
+  console.log("DEBUG sendCommand payload", payload);
+  const res = await axios.post('/api/command', payload);
+  return res.data;
+}
 
 export const uploadVideo = async (file: File): Promise<string> => {
   const formData = new FormData();
@@ -152,4 +166,9 @@ export const uploadVideo = async (file: File): Promise<string> => {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return response.data.file_path;
-}; 
+};
+
+export async function saveTimeline(asset_path: string, timeline: any) {
+  const res = await axios.post('/api/timeline/save', { asset_path, timeline });
+  return res.data;
+} 

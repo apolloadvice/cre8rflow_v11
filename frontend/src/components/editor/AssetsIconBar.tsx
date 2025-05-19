@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useEditorStore } from '@/store/editorStore';
-import { uploadVideo } from "@/api/apiClient";
+import { supabase } from "@/integrations/supabase/client";
 
 // Define VideoAsset type
 type VideoAsset = {
@@ -84,7 +84,6 @@ const AssetsIconBar = () => {
 
   const handleFileUpload = async (files: FileList) => {
     const file = files[0];
-
     if (!file) return;
 
     if (!file.type.startsWith("video/")) {
@@ -107,66 +106,85 @@ const AssetsIconBar = () => {
 
     setIsUploading(true);
 
-    // Upload the file to the backend and get the backend-accessible file path
-    let backendFilePath = "";
-    try {
-      backendFilePath = await uploadVideo(file);
-    } catch (err) {
-      setIsUploading(false);
-      toast({
-        title: "Upload failed",
-        description: "There was an error uploading your video to the server.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    // Step 1: Extract metadata in browser
     const videoUrl = URL.createObjectURL(file);
     const video = document.createElement("video");
     video.src = videoUrl;
-    video.onloadedmetadata = () => {
-      const newVideo: VideoAsset = {
-        id: `upload-${Date.now()}`,
-        name: file.name,
-        thumbnail: "",
-        duration: video.duration,
-        uploaded: new Date(),
-        src: videoUrl,
-        file_path: backendFilePath, // Store backend file path
-      };
-      // Add to asset store
-      addAsset({
-        id: newVideo.id,
-        name: newVideo.name,
-        file_path: newVideo.file_path!,
-        duration: newVideo.duration,
-        // Add other metadata as needed
-      });
-      setTimeout(() => {
-        try {
-          video.currentTime = 1;
+
+    video.onloadedmetadata = async () => {
+      const duration = video.duration;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+
+      // Generate a thumbnail (optional)
+      let thumbnail = "";
+      try {
+        video.currentTime = 1;
+        await new Promise((resolve) => {
           video.onseeked = () => {
             const canvas = document.createElement("canvas");
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            canvas.width = width;
+            canvas.height = height;
             const ctx = canvas.getContext("2d");
             ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-            newVideo.thumbnail = canvas.toDataURL("image/jpeg");
-            setUploadedVideos(prev => [newVideo, ...prev]);
-            setIsUploading(false);
-            setActiveVideoAsset(newVideo);
-            if (newVideo.src) {
-              setVideoSrc(newVideo.src);
-            }
-            toast({
-              title: "Video uploaded",
-              description: `${file.name} has been added to your assets`,
-            });
-            setIsVideoDialogOpen(false);
+            thumbnail = canvas.toDataURL("image/jpeg");
+            resolve(true);
           };
-        } catch (error) {
-          console.error("Error generating thumbnail:", error);
-          newVideo.thumbnail = "https://i.imgur.com/JcGrHtu.jpg";
+        });
+      } catch {
+        thumbnail = "https://i.imgur.com/JcGrHtu.jpg";
+      }
+
+      try {
+        // Step 2: Get upload path from backend
+        const uploadUrlRes = await fetch("/api/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, folder: "user123/" }),
+        });
+        if (!uploadUrlRes.ok) throw new Error("Failed to get upload URL");
+        const { path } = await uploadUrlRes.json();
+
+        // Step 3: Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage.from("assets").upload(path, file, { upsert: true });
+        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+        // Step 4: Register asset with backend
+        const registerRes = await fetch("/api/assets/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            path,
+            originalName: file.name,
+            duration,
+            width,
+            height,
+            size: file.size,
+            mimetype: file.type,
+          }),
+        });
+        if (!registerRes.ok) throw new Error("Failed to register asset metadata");
+        const { id, status } = await registerRes.json();
+        if (status !== "registered") throw new Error("Asset registration failed");
+
+        // Step 5: Update UI state (add to asset store, set thumbnail, etc.)
+        const newVideo = {
+          id,
+          name: file.name,
+          thumbnail,
+          duration,
+          uploaded: new Date(),
+          src: videoUrl,
+          file_path: path,
+        };
+        addAsset({
+          id: newVideo.id,
+          name: newVideo.name,
+          file_path: newVideo.file_path!,
+          duration: newVideo.duration,
+          // Add other metadata as needed
+        });
+        setTimeout(() => {
           setUploadedVideos(prev => [newVideo, ...prev]);
           setIsUploading(false);
           setActiveVideoAsset(newVideo);
@@ -178,9 +196,17 @@ const AssetsIconBar = () => {
             description: `${file.name} has been added to your assets`,
           });
           setIsVideoDialogOpen(false);
-        }
-      }, 500);
+        }, 500);
+      } catch (error) {
+        setIsUploading(false);
+        toast({
+          title: "Upload failed",
+          description: error instanceof Error ? error.message : "There was an error processing your video",
+          variant: "destructive",
+        });
+      }
     };
+
     video.onerror = () => {
       setIsUploading(false);
       toast({

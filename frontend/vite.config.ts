@@ -23,7 +23,10 @@ export default defineConfig(({ mode }) => ({
       protocol: 'ws',
       host: 'localhost',
       clientPort: 8080
-    }
+    },
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
   },
   preview: {
     host: '0.0.0.0',

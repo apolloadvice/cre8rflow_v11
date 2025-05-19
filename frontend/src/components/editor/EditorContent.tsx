@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "@/components/ui/resizable";
 import VideoPlayer from "@/components/editor/VideoPlayer";
@@ -9,6 +8,9 @@ import TimecodeDisplay from "@/components/editor/TimecodeDisplay";
 import { useEditorStore, useLayoutSetter, useLayout } from "@/store/editorStore";
 import { useVideoHandler } from "@/hooks/useVideoHandler";
 import { useAICommands } from "@/hooks/useAICommands";
+import { saveTimeline } from "@/api/apiClient";
+import { useToast } from "@/hooks/use-toast";
+import { debounce } from "lodash";
 
 const EditorContent = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -24,12 +26,28 @@ const EditorContent = () => {
     duration, 
     setCurrentTime,
     setDuration,
-    updateClip
+    updateClip,
+    activeVideoAsset,
+    clips,
+    setClips
   } = useEditorStore();
   
   // Use our custom hooks
-  const { handleVideoDrop, handleVideoAssetDrop, handleVideoProcessed } = useVideoHandler();
+  const { handleVideoDrop, handleVideoAssetDrop: origHandleVideoAssetDrop, handleVideoProcessed } = useVideoHandler();
   const { handleChatCommand } = useAICommands();
+  const { toast } = useToast();
+
+  // Debounced timeline save
+  const debouncedSaveTimeline = useRef(
+    debounce(async (assetPath: string, timeline: any) => {
+      try {
+        await saveTimeline(assetPath, timeline);
+        toast({ title: "Timeline saved", description: "Your changes have been saved.", variant: "default" });
+      } catch (err: any) {
+        toast({ title: "Save failed", description: err.message || "Failed to save timeline.", variant: "destructive" });
+      }
+    }, 800)
+  ).current;
 
   // Animation frame for syncing video time with store
   useEffect(() => {
@@ -49,9 +67,44 @@ const EditorContent = () => {
     };
   }, [setCurrentTime]);
 
-  // Handle clip updates (trimming)
+  // Helper to build timeline object for backend
+  function buildTimelineObject(clips: any[], frameRate = 30.0) {
+    // Group clips by track number
+    const trackCount = 6;
+    const trackTypes = ["video", "text", "audio", "effects", "format", "other"];
+    const tracks = Array.from({ length: trackCount }).map((_, i) => ({
+      name: `${trackTypes[i]?.charAt(0).toUpperCase() + trackTypes[i]?.slice(1) || "Track"} ${i + 1}`,
+      track_type: trackTypes[i] || "video",
+      clips: clips.filter(c => c.track === i)
+    }));
+    return {
+      _type: "Timeline",
+      version: "1.0",
+      frame_rate: frameRate,
+      tracks,
+      transitions: []
+    };
+  }
+
+  // Save timeline after clip update
   const handleClipUpdate = (clipId: string, updates: { start?: number; end?: number }) => {
     updateClip(clipId, updates);
+    if (activeVideoAsset?.file_path) {
+      const timelineObj = buildTimelineObject(clips.map(c => c.id === clipId ? { ...c, ...updates } : c));
+      debouncedSaveTimeline(activeVideoAsset.file_path, timelineObj);
+    }
+  };
+
+  // Patch handleVideoAssetDrop to save timeline after drop
+  const handleVideoAssetDrop = (videoAsset: any, track: number, dropTime: number) => {
+    origHandleVideoAssetDrop(videoAsset, track, dropTime);
+    // Save after drop (new clip added)
+    setTimeout(() => {
+      if (activeVideoAsset?.file_path) {
+        const timelineObj = buildTimelineObject(useEditorStore.getState().clips);
+        debouncedSaveTimeline(activeVideoAsset.file_path, timelineObj);
+      }
+    }, 0);
   };
 
   // Handlers for layout changes
@@ -145,7 +198,7 @@ const EditorContent = () => {
                 duration={duration}
                 currentTime={currentTime}
                 onTimeUpdate={setCurrentTime}
-                clips={useEditorStore.getState().clips}
+                clips={clips}
                 onClipSelect={useEditorStore.getState().setSelectedClipId}
                 selectedClipId={useEditorStore.getState().selectedClipId}
                 onVideoDrop={handleVideoDrop}
