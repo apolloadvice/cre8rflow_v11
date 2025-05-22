@@ -90,8 +90,6 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
     // --- End optimistic update ---
 
     try {
-      // Artificial delay for testing optimistic UI
-      await new Promise(resolve => setTimeout(resolve, 1500));
       const response = await sendCommand(assetPath, input);
       toast({ description: "Edit applied ✔️" });
 
