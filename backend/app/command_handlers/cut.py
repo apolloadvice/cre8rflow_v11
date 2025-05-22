@@ -26,6 +26,10 @@ class CutCommandHandler(BaseCommandHandler):
         return bool(cut_pattern.match(command_text))
 
     def parse(self, command_text: str, frame_rate: int = 30) -> EditOperation:
+        """
+        Parse a cut command. The returned 'timestamp' parameter is always in frames (not seconds).
+        All downstream logic expects frames for cut locations.
+        """
         cut_synonyms = r"cut|split|divide|slice"
         cut_pattern = re.compile(
             rf"^(?P<verb>{cut_synonyms})(?:\s+{full_target_pattern})?(?:\s+at\s+(?P<timestamp>[\w\s:-]+))?$",

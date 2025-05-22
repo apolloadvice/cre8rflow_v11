@@ -1,4 +1,3 @@
-
 # Welcome to your Lovable project
 
 ## Project info
@@ -80,4 +79,52 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## 📝 How to Use Natural Language Video Editing Commands
+
+You can control the video editor using natural language commands in the chat panel. Here's how to structure your input for best results:
+
+### Supported Command Types & Examples
+
+#### 1. **Cut**
+- **Format:** `cut [first|last|clip N] clip at [time]`
+- **Examples:**
+  - `cut first clip at 00:05`
+  - `cut last clip at 00:10`
+  - `cut clip 2 at 00:15`
+
+#### 2. **Trim**
+- **Format:** `trim [first|last|clip N] clip [to|from] [time]`
+- **Examples:**
+  - `trim first clip to 00:10` (keeps only up to 10s)
+  - `trim last clip from 00:05` (removes everything before 5s)
+  - `trim clip 2 to 00:20`
+
+#### 3. **Add Text Overlay**
+- **Format:** `add text "[your text]" [at|from] [start time] [to [end time]]`
+- **Examples:**
+  - `add text "Hello World" at 00:05` (shows for 3s by default)
+  - `add text "Intro" from 00:02 to 00:07`
+
+#### 4. **Add Image Overlay**
+- **Format:** `overlay [image.png] [at|from] [start time] [to [end time]]`
+- **Examples:**
+  - `overlay logo.png at 00:10` (shows for 3s by default)
+  - `overlay image.png from 00:04 to 00:06`
+
+### ⏱ Time Format
+- Use `mm:ss` (e.g., `01:23` for 1 minute 23 seconds) or `ss` (e.g., `15` for 15 seconds).
+- You can also use `hh:mm:ss` for longer videos.
+
+### 💡 Tips for Best Results
+- Be specific about which clip you want to edit (e.g., `first`, `last`, or `clip 2`).
+- For overlays, make sure the asset name matches an uploaded or available image.
+- If you make a mistake, use the Undo button or `undo` command.
+- The timeline and preview will update instantly for supported commands.
+
+### ⚠️ Limitations
+- Only the above command formats are currently supported.
+- More advanced commands (e.g., transitions, effects) may be added in the future.
+
+For more help, see the chat panel's quick actions or ask for examples!
 

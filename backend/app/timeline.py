@@ -84,6 +84,8 @@ class VideoClip(BaseClip):
     def to_dict(self) -> dict:
         """
         Serialize this VideoClip to a dictionary representation.
+        Ensures start and end are always stored as frames (integers), never seconds.
+        This is a safeguard against accidental seconds-based values.
         Returns:
             dict: Serialized representation of the VideoClip.
         """
@@ -91,8 +93,8 @@ class VideoClip(BaseClip):
             "_type": self.__class__.__name__,
             "clip_id": self.clip_id,
             "name": self.name,
-            "start": self.start,
-            "end": self.end,
+            "start": int(round(self.start)),
+            "end": int(round(self.end)),
             "track_type": self.track_type,
             "effects": [effect.to_dict() for effect in self.effects],
             "file_path": self.file_path,
@@ -102,6 +104,8 @@ class VideoClip(BaseClip):
     def from_dict(data: dict) -> 'VideoClip':
         """
         Deserialize a VideoClip (or subclass) from a dictionary representation.
+        Ensures start and end are always in frames. If they appear to be in seconds (e.g., end < 1000),
+        auto-convert using frame_rate (default 30).
         Args:
             data (dict): Serialized representation of the VideoClip.
         Returns:
@@ -109,10 +113,17 @@ class VideoClip(BaseClip):
         """
         # Extensible: support custom subclasses via _type
         cls = globals().get(data.get("_type", "VideoClip"), VideoClip)
+        frame_rate = data.get("frame_rate", 30)  # Use 30 if not present
+        start = data["start"]
+        end = data["end"]
+        # If end is suspiciously small, treat as seconds and convert to frames
+        if end < 1000:
+            start = int(round(start * frame_rate))
+            end = int(round(end * frame_rate))
         clip = cls(
             name=data["name"],
-            start_frame=data["start"],
-            end_frame=data["end"],
+            start_frame=start,
+            end_frame=end,
             track_type=data.get("track_type", "video"),
             file_path=data.get("file_path"),
             clip_id=data.get("clip_id")
@@ -569,25 +580,23 @@ class Timeline:
         self.duration = max(self.duration, clip.end)
         self._notify_change()
 
-    def load_video(self, file_path: str, track_index: int = 0, position: Optional[float] = None) -> VideoClip:
+    def load_video(self, file_path: str, track_index: int = 0, position: Optional[float] = None, duration_seconds: Optional[float] = None) -> VideoClip:
         """
         Load a video file and add it as a clip to the timeline.
-        For now, this mocks the duration (e.g., 60s) and uses the file name as the clip name.
-        The file_path is stored in the VideoClip for export/rendering.
-        MoviePy is NOT required for production or backend export; it may be used optionally for prototyping/preview only.
-
         Args:
             file_path (str): Path to the video file
             track_index (int): Track to add the clip to
             position (float, optional): Position in seconds. If None, appends to end.
-
+            duration_seconds (float, optional): Actual duration of the video in seconds. If None, uses default/mock.
         Returns:
             VideoClip: The created video clip
         """
         name = os.path.splitext(os.path.basename(file_path))[0]
-        # Duration is mocked for now (e.g., 60s). MoviePy can be used optionally for prototyping/preview only.
-        duration = 60.0
-        clip = VideoClip(name=name, start_frame=0, end_frame=duration, file_path=file_path)
+        if duration_seconds is None:
+            duration_seconds = 60.0  # Fallback/mock duration
+        start_frame = 0
+        end_frame = int(self.frame_rate * duration_seconds)
+        clip = VideoClip(name=name, start_frame=start_frame, end_frame=end_frame, file_path=file_path)
         self.add_clip(clip, track_index=track_index, position=position)
         return clip
 
@@ -642,7 +651,7 @@ class Timeline:
 
     def trim_clip(self, clip_name: str = None, timestamp: float = None, track_type: str = "video", track_index: int = 0, clip_id: str = None) -> bool:
         """
-        Trim (cut) a clip at the given timestamp, splitting it into two clips.
+        Trim (cut) a clip at the given timestamp (in seconds), splitting it into two clips.
         Now supports recursively finding the clip inside nested CompoundClips.
         Args:
             clip_name (str): Name of the clip to trim
@@ -656,18 +665,20 @@ class Timeline:
         track = self.get_track(track_type, track_index)
         logging.debug(f"[trim_clip] BEFORE: {[{'name': c.name, 'start': c.start, 'end': c.end, 'clip_id': getattr(c, 'clip_id', None)} for c in track.clips]}")
         parent, idx, clip = self._find_clip_recursive(track.clips, target_name=clip_name, target_id=clip_id)
-        if clip is not None and clip.start < timestamp < clip.end:
-            duration1 = timestamp - clip.start
-            duration2 = clip.end - timestamp
-            first = type(clip)(name=clip.name + "_part1", start_frame=clip.start, end_frame=clip.start + duration1, clip_id=str(uuid.uuid4()))
-            second = type(clip)(name=clip.name + "_part2", start_frame=timestamp, end_frame=timestamp + duration2, clip_id=str(uuid.uuid4()))
-            parent.pop(idx)
-            parent.insert(idx, second)
-            parent.insert(idx, first)
-            self._update_ancestor_bounds(track, parent)
-            self._notify_change()
-            logging.debug(f"[trim_clip] AFTER: {[{'name': c.name, 'start': c.start, 'end': c.end, 'clip_id': getattr(c, 'clip_id', None)} for c in track.clips]}")
-            return True
+        if clip is not None and timestamp is not None:
+            timestamp_frame = self.seconds_to_frames(timestamp)
+            if clip.start < timestamp_frame < clip.end:
+                duration1 = timestamp_frame - clip.start
+                duration2 = clip.end - timestamp_frame
+                first = type(clip)(name=clip.name + "_part1", start_frame=clip.start, end_frame=clip.start + duration1, clip_id=str(uuid.uuid4()))
+                second = type(clip)(name=clip.name + "_part2", start_frame=timestamp_frame, end_frame=timestamp_frame + duration2, clip_id=str(uuid.uuid4()))
+                parent.pop(idx)
+                parent.insert(idx, second)
+                parent.insert(idx, first)
+                self._update_ancestor_bounds(track, parent)
+                self._notify_change()
+                logging.debug(f"[trim_clip] AFTER: {[{'name': c.name, 'start': c.start, 'end': c.end, 'clip_id': getattr(c, 'clip_id', None)} for c in track.clips]}")
+                return True
         logging.warning(f"[trim_clip] No cut performed: clip_name={clip_name}, clip_id={clip_id}, timestamp={timestamp}, found_clip={clip is not None}, clip_range=({getattr(clip, 'start', None)}, {getattr(clip, 'end', None)})")
         return False
 

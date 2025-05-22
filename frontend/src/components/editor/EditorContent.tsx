@@ -29,7 +29,9 @@ const EditorContent = () => {
     updateClip,
     activeVideoAsset,
     clips,
-    setClips
+    setClips,
+    selectedClipId,
+    setSelectedClipId,
   } = useEditorStore();
   
   // Use our custom hooks
@@ -165,6 +167,7 @@ const EditorContent = () => {
                     onDurationChange={setDuration}
                     className="h-full"
                     rightControl={<TimecodeDisplay />}
+                    clips={clips}
                   />
                 </ResizablePanel>
                 
@@ -199,8 +202,8 @@ const EditorContent = () => {
                 currentTime={currentTime}
                 onTimeUpdate={setCurrentTime}
                 clips={clips}
-                onClipSelect={useEditorStore.getState().setSelectedClipId}
-                selectedClipId={useEditorStore.getState().selectedClipId}
+                onClipSelect={setSelectedClipId}
+                selectedClipId={selectedClipId}
                 onVideoDrop={handleVideoDrop}
                 onVideoAssetDrop={handleVideoAssetDrop}
                 onClipUpdate={handleClipUpdate}

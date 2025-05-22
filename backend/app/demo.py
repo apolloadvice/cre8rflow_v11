@@ -9,7 +9,7 @@ if __name__ == "__main__":
     executor = CommandExecutor(timeline)
 
     # Demo: Load a video file
-    video_clip = timeline.load_video("/path/to/my_video.mp4")
+    video_clip = timeline.load_video("/path/to/my_video.mp4", duration_seconds=31.0)
     print(f"Loaded video: name={video_clip.name}, start={video_clip.start}, end={video_clip.end}")
 
     # Add a sample clip to the timeline

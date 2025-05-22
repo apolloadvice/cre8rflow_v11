@@ -133,9 +133,12 @@ export const useEditorStore = create<EditorStore>()(
       },
       
       deleteClip: (id) => {
-        set((state) => ({
-          clips: state.clips.filter((clip) => clip.id !== id),
-        }));
+        console.log('[Store] deleteClip called with:', id);
+        set((state) => {
+          const newClips = state.clips.filter((clip) => clip.id !== id);
+          console.log('[Store] new clips after deletion:', newClips);
+          return { clips: newClips };
+        });
         get().recalculateDuration();
         get().pushToHistory();
       },
@@ -149,6 +152,7 @@ export const useEditorStore = create<EditorStore>()(
       },
       
       setSelectedClipId: (id) => {
+        console.log('[Store] setSelectedClipId called with:', id);
         set({ selectedClipId: id });
       },
       
@@ -259,20 +263,42 @@ export const useKeyboardShortcuts = () => {
   const { undo, redo, deleteClip, selectedClipId, setSelectedClipId } = useEditorStore();
   
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Debug: Log every keydown event
+    console.log('[KeyboardShortcuts] KeyDown event:', {
+      key: e.key,
+      ctrl: e.ctrlKey,
+      meta: e.metaKey,
+      shift: e.shiftKey,
+      selectedClipId,
+      activeElement: document.activeElement?.tagName,
+    });
+    // Prevent shortcuts if typing in an input, textarea, or contenteditable
+    const active = document.activeElement;
+    if (
+      active &&
+      (
+        active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        (active as HTMLElement).isContentEditable
+      )
+    ) {
+      return;
+    }
     // Undo: Ctrl/Cmd + Z
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      console.log('[KeyboardShortcuts] Undo triggered');
       e.preventDefault();
       undo();
     }
-    
     // Redo: Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      console.log('[KeyboardShortcuts] Redo triggered');
       e.preventDefault();
       redo();
     }
-    
     // Delete selected clip: Backspace or Delete key
     if ((e.key === 'Backspace' || e.key === 'Delete') && selectedClipId) {
+      console.log('[KeyboardShortcuts] Delete triggered for:', selectedClipId);
       e.preventDefault();
       deleteClip(selectedClipId);
       setSelectedClipId(null);
