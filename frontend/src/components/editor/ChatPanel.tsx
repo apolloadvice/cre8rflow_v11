@@ -7,6 +7,7 @@ import { useCommand } from "@/hooks/useCommand";
 import { useEditorStore } from "@/store/editorStore";
 import { sendCommand } from "@/api/apiClient";
 import { useToast } from "@/components/ui/use-toast";
+import { simulateCutCommand } from "@/utils/optimisticEdit";
 
 interface Message {
   id: string;
@@ -72,7 +73,25 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
       setIsThinking(false);
       return;
     }
+
+    // --- Optimistic UI update for 'cut' commands ---
+    const prevClips = [...clips]; // Save previous state for rollback
+    let optimisticallyUpdated = false;
+    if (/^cut\s+/i.test(input)) {
+      const optimisticClips = simulateCutCommand(input, clips);
+      console.log('[ChatPanel] Before optimistic setClips:', clips);
+      console.log('[ChatPanel] Optimistic clips:', optimisticClips);
+      if (optimisticClips !== clips) {
+        setClips(optimisticClips);
+        optimisticallyUpdated = true;
+        console.log('[ChatPanel] After optimistic setClips:', optimisticClips);
+      }
+    }
+    // --- End optimistic update ---
+
     try {
+      // Artificial delay for testing optimistic UI
+      await new Promise(resolve => setTimeout(resolve, 1500));
       const response = await sendCommand(assetPath, input);
       toast({ description: "Edit applied ✔️" });
 
@@ -95,6 +114,7 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
             });
           }
         }
+        console.log('[ChatPanel] After backend response, newClips:', newClips);
         setClips(newClips);
       }
     } catch (err: any) {
@@ -109,6 +129,10 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
         message = err.message;
       } else {
         message = JSON.stringify(err);
+      }
+      // --- Rollback optimistic update on error ---
+      if (optimisticallyUpdated) {
+        setClips(prevClips);
       }
       toast({ variant: "destructive", description: message });
     }
