@@ -33,6 +33,9 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   onVideoAssetDrop,
   onClipUpdate,
 }, ref) => {
+  // Debug: log clips prop on every render
+  console.log("[Timeline] clips prop:", clips);
+
   const timelineRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   const trackCount = 6;
