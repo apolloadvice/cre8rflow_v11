@@ -1,5 +1,4 @@
-
-import { useState, useRef, useEffect, forwardRef } from "react";
+import { useState, useRef, useEffect, forwardRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Pause, Volume2, VolumeX, Download, Settings } from "lucide-react";
@@ -15,6 +14,7 @@ interface VideoPlayerProps {
   onDurationChange: (duration: number) => void;
   className?: string;
   rightControl?: React.ReactNode;
+  clips?: any[]; // Timeline clips for segment skipping and overlays
 }
 
 const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(({
@@ -23,7 +23,8 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(({
   onTimeUpdate,
   onDurationChange,
   className,
-  rightControl
+  rightControl,
+  clips = [], // timeline clips
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -99,6 +100,97 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(({
     }, 3000);
   };
 
+  // --- Timeline Segment & Overlay Logic ---
+  // Parse segments (video parts to play) and overlays (text/image)
+  const { segments, overlays } = useMemo(() => {
+    // Video segments: type is not 'text' or 'overlay'
+    const segments = clips
+      .filter((clip) => clip.type !== "text" && clip.type !== "overlay")
+      .map((clip) => ({ start: clip.start, end: clip.end }))
+      .sort((a, b) => a.start - b.start);
+    // Overlays: type is 'text' or 'overlay'
+    const overlays = clips
+      .filter((clip) => clip.type === "text" || clip.type === "overlay")
+      .map((clip) => ({ ...clip }));
+    return { segments, overlays };
+  }, [clips]);
+
+  // Helper: find the current segment index for a given time
+  const getCurrentSegmentIndex = (time: number) => {
+    return segments.findIndex(seg => time >= seg.start && time < seg.end);
+  };
+
+  // Helper: find the next segment index after a given time
+  const getNextSegmentIndex = (time: number) => {
+    return segments.findIndex(seg => seg.start > time);
+  };
+
+  // --- Segment Skipping Logic ---
+  useEffect(() => {
+    const video = resolvedRef.current;
+    if (!video || segments.length === 0) return;
+
+    const handleTimeUpdate = () => {
+      const t = video.currentTime;
+      const segIdx = getCurrentSegmentIndex(t);
+      if (segIdx === -1) {
+        // Not in any segment: seek to next segment or pause
+        const nextIdx = getNextSegmentIndex(t);
+        if (nextIdx !== -1) {
+          video.currentTime = segments[nextIdx].start;
+        } else {
+          video.pause();
+          setIsPlaying(false);
+        }
+      } else {
+        // In a segment: if at end, jump to next segment or pause
+        const seg = segments[segIdx];
+        if (t >= seg.end - 0.03) { // allow for floating point
+          const nextIdx = segIdx + 1;
+          if (nextIdx < segments.length) {
+            video.currentTime = segments[nextIdx].start;
+          } else {
+            video.pause();
+            setIsPlaying(false);
+          }
+        }
+      }
+      onTimeUpdate(video.currentTime);
+    };
+
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    return () => {
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+    };
+  }, [resolvedRef, segments, onTimeUpdate]);
+
+  // --- Start at first segment if needed ---
+  useEffect(() => {
+    const video = resolvedRef.current;
+    if (!video || segments.length === 0) return;
+    if (video.currentTime < segments[0].start || video.currentTime >= segments[0].end) {
+      video.currentTime = segments[0].start;
+    }
+  }, [resolvedRef, segments]);
+
+  // --- Overlay State ---
+  const [activeOverlays, setActiveOverlays] = useState<any[]>([]);
+
+  // Update overlays on timeupdate (use requestAnimationFrame for smoothness)
+  useEffect(() => {
+    let rafId: number;
+    const video = resolvedRef.current;
+    if (!video) return;
+    const updateOverlays = () => {
+      const t = video.currentTime;
+      const actives = overlays.filter(ovl => t >= ovl.start && t < ovl.end);
+      setActiveOverlays(actives);
+      rafId = requestAnimationFrame(updateOverlays);
+    };
+    rafId = requestAnimationFrame(updateOverlays);
+    return () => cancelAnimationFrame(rafId);
+  }, [overlays, resolvedRef]);
+
   // Setup initial event listeners
   useEffect(() => {
     const video = resolvedRef.current;
@@ -139,14 +231,28 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(({
       onMouseMove={showControls}
     >
       {src ? (
-        <video 
-          ref={resolvedRef}
-          className="max-h-full max-w-full"
-          src={src}
-          onClick={togglePlayPause}
-        >
-          Your browser does not support the video tag.
-        </video>
+        <>
+          <video 
+            ref={resolvedRef}
+            className="max-h-full max-w-full"
+            src={src}
+            onClick={togglePlayPause}
+          >
+            Your browser does not support the video tag.
+          </video>
+          {/* Overlay Layer */}
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
+            {activeOverlays.map((ovl, i) =>
+              ovl.type === "text" ? (
+                <div key={i} className="text-white text-3xl font-bold bg-black/60 px-4 py-2 rounded shadow-lg">
+                  {ovl.text}
+                </div>
+              ) : ovl.type === "overlay" ? (
+                <img key={i} src={ovl.asset} alt="overlay" className="max-h-1/2 max-w-1/2 object-contain" />
+              ) : null
+            )}
+          </div>
+        </>
       ) : (
         <div className="flex flex-col items-center justify-center text-cre8r-gray-400 h-full">
           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-4 opacity-30"><path d="m10 7 5 3-5 3z"></path><rect width="20" height="14" x="2" y="3" rx="2"></rect><path d="M22 17v4"></path><path d="M2 17v4"></path></svg>

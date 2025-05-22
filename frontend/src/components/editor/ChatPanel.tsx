@@ -7,7 +7,7 @@ import { useCommand } from "@/hooks/useCommand";
 import { useEditorStore } from "@/store/editorStore";
 import { sendCommand } from "@/api/apiClient";
 import { useToast } from "@/components/ui/use-toast";
-import { simulateCutCommand } from "@/utils/optimisticEdit";
+import { simulateCutCommand, simulateOptimisticEdit } from "@/utils/optimisticEdit";
 
 interface Message {
   id: string;
@@ -74,18 +74,15 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
       return;
     }
 
-    // --- Optimistic UI update for 'cut' commands ---
+    // --- Optimistic UI update for supported commands ---
     const prevClips = [...clips]; // Save previous state for rollback
+    const optimisticClips = simulateOptimisticEdit(input, clips);
+    console.log('[ChatPanel] simulateOptimisticEdit:', input, optimisticClips);
     let optimisticallyUpdated = false;
-    if (/^cut\s+/i.test(input)) {
-      const optimisticClips = simulateCutCommand(input, clips);
-      console.log('[ChatPanel] Before optimistic setClips:', clips);
-      console.log('[ChatPanel] Optimistic clips:', optimisticClips);
-      if (optimisticClips !== clips) {
-        setClips(optimisticClips);
-        optimisticallyUpdated = true;
-        console.log('[ChatPanel] After optimistic setClips:', optimisticClips);
-      }
+    if (optimisticClips !== clips) {
+      setClips(optimisticClips);
+      optimisticallyUpdated = true;
+      console.log('[ChatPanel] After optimistic setClips:', optimisticClips);
     }
     // --- End optimistic update ---
 

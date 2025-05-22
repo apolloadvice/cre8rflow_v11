@@ -14,6 +14,8 @@ interface TimelineProps {
     track: number;
     type?: string;
     name?: string;
+    text?: string;
+    asset?: string;
   }[];
   onClipSelect?: (clipId: string | null) => void;
   selectedClipId?: string | null;
@@ -33,6 +35,8 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   onVideoAssetDrop,
   onClipUpdate,
 }, ref) => {
+  console.log('[Timeline] RENDER');
+
   // Debug: log clips prop on every render
   console.log("[Timeline] clips prop:", clips);
 
@@ -317,7 +321,13 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
           ref={resolvedRef}
           className="relative h-full"
           style={{ width: `${100 * zoom}%`, minWidth: "100%" }}
-          onClick={handleTimelineClick}
+          onClick={(e) => {
+            // Deselect any selected clip when clicking empty timeline space
+            if (e.target === e.currentTarget) {
+              onClipSelect?.(null);
+            }
+            handleTimelineClick(e);
+          }}
         >
           {/* Time markers */}
           <div className="h-6 border-b border-cre8r-gray-700 relative mb-1">
@@ -337,12 +347,13 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, index)}
                 >
-                  {clips.filter(clip => clip.track === index).map((clip) => (
+                  {/* Render video/audio/effect clips for this track */}
+                  {clips.filter(clip => clip.track === index && clip.type !== "text" && clip.type !== "overlay").map((clip) => (
                     <div
                       key={clip.id}
                       className={cn(
                         "video-timeline-marker absolute h-10 my-1 rounded overflow-hidden cursor-pointer hover:opacity-100 transition-opacity",
-                        selectedClipId === clip.id ? "ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white"
+                        selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0"
                       )}
                       style={{
                         left: `${(clip.start / duration) * 100}%`,
@@ -351,6 +362,7 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        console.log('[Timeline] Video/other clip clicked:', clip.id, clip.type);
                         onClipSelect?.(clip.id);
                       }}
                       title={clip.name || "Edit"}
@@ -360,7 +372,6 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                           {clip.name || formatTime(clip.end - clip.start)}
                         </span>
                       </div>
-                      
                       {/* Left trim handle */}
                       <div 
                         className="absolute left-0 top-0 bottom-0 w-3 hover:bg-white hover:bg-opacity-30 cursor-w-resize z-10"
@@ -369,7 +380,6 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                       >
                         <div className="h-full w-1 bg-white opacity-60 mx-auto"></div>
                       </div>
-                      
                       {/* Right trim handle */}
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-3 hover:bg-white hover:bg-opacity-30 cursor-e-resize z-10"
@@ -378,6 +388,54 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                       >
                         <div className="h-full w-1 bg-white opacity-60 mx-auto"></div>
                       </div>
+                    </div>
+                  ))}
+                  {/* Render text overlays only on the Text track (index 1) */}
+                  {index === 1 && clips.filter(clip => clip.type === "text").map((clip) => (
+                    <div
+                      key={clip.id}
+                      className={cn(
+                        "absolute bg-yellow-400/80 rounded h-6 flex items-center justify-center border border-yellow-600 cursor-pointer",
+                        selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0"
+                      )}
+                      style={{
+                        left: `${(clip.start / duration) * 100}%`,
+                        width: `${((clip.end - clip.start) / duration) * 100}%`,
+                        top: 6, // visually offset within the track
+                        zIndex: 3,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('[Timeline] Text overlay clicked:', clip.id, clip.type);
+                        onClipSelect?.(clip.id);
+                      }}
+                      title={clip.text || clip.name}
+                    >
+                      <span className="text-xs font-bold text-yellow-900 px-2">{clip.text || clip.name}</span>
+                    </div>
+                  ))}
+                  {/* Render overlays only on the Effects track (index 3) */}
+                  {index === 3 && clips.filter(clip => clip.type === "overlay").map((clip) => (
+                    <div
+                      key={clip.id}
+                      className={cn(
+                        "absolute bg-green-400/80 rounded h-6 flex items-center justify-center border border-green-600 cursor-pointer",
+                        selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0"
+                      )}
+                      style={{
+                        left: `${(clip.start / duration) * 100}%`,
+                        width: `${((clip.end - clip.start) / duration) * 100}%`,
+                        top: 6, // visually offset within the track
+                        zIndex: 3,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('[Timeline] Overlay clicked:', clip.id, clip.type);
+                        onClipSelect?.(clip.id);
+                      }}
+                      title={clip.asset || clip.name}
+                    >
+                      <span className="text-xs font-bold text-green-900 px-2">{clip.asset || clip.name}</span>
                     </div>
                   ))}
                 </div>
