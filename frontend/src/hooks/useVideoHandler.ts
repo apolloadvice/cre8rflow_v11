@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useEditorStore, Clip } from "@/store/editorStore";
+import { updateAssetDuration } from "@/api/apiClient";
 
 export const useVideoHandler = () => {
   const { toast } = useToast();
@@ -39,7 +40,7 @@ export const useVideoHandler = () => {
     const video = document.createElement("video");
     video.src = videoUrl;
     
-    video.onloadedmetadata = () => {
+    video.onloadedmetadata = async () => {
       const clipDuration = video.duration;
       const newClip: Clip = {
         id: `clip-${Date.now()}`,
@@ -58,6 +59,13 @@ export const useVideoHandler = () => {
         setDuration(clipDuration);
       }
       
+      // Try to update asset duration in Supabase
+      try {
+        await updateAssetDuration(file.name, clipDuration);
+      } catch (e) {
+        console.warn("Failed to update asset duration in Supabase", e);
+      }
+      
       toast({
         title: "Video added to timeline",
         description: `${file.name} has been added to track ${track + 1}`,
@@ -65,7 +73,7 @@ export const useVideoHandler = () => {
     };
   };
 
-  const handleVideoAssetDrop = (videoAsset: any, track: number, dropTime: number) => {
+  const handleVideoAssetDrop = async (videoAsset: any, track: number, dropTime: number) => {
     // Always look up the asset in the asset store by id
     const asset = getAssetById ? getAssetById(videoAsset.id) : videoAsset;
     if (!asset || !asset.file_path) {
@@ -91,6 +99,14 @@ export const useVideoHandler = () => {
     } as any;
     setClips([...clips, newClip]);
     setSelectedClipId(newClip.id);
+    
+    // Try to update asset duration in Supabase
+    try {
+      await updateAssetDuration(asset.file_path, asset.duration);
+    } catch (e) {
+      console.warn("Failed to update asset duration in Supabase", e);
+    }
+    
     toast({
       title: "Video added to timeline",
       description: `${asset.name} has been added to track ${track + 1}`,

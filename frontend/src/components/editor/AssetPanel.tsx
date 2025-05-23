@@ -143,6 +143,7 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
         });
         if (!registerRes.ok) throw new Error("Failed to register asset metadata");
         const { id, status } = await registerRes.json();
+        console.log("uploadUrlRes path", path, typeof path);
         if (status !== "registered") throw new Error("Asset registration failed");
 
         // Step 5: Update UI state

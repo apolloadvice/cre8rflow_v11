@@ -2,6 +2,68 @@
 
 This project is an NLP-based video editing tool that allows users to edit videos on a timeline using natural language commands.
 
+## Major Upgrade: AI-Powered NLP Command Parsing (2024-06-15)
+
+The command parser is now powered by OpenAI's GPT-4 (or similar), enabling robust, flexible natural language understanding. Users can enter free-form, conversational commands (even with typos or casual phrasing), and the system will interpret and apply the intended edits to the video timeline.
+
+- **Regex/spaCy-based parsing is deprecated.**
+- **All command parsing is routed through an OpenAI-powered backend endpoint.**
+- **A clear schema for AI output (edit intent JSON) is enforced.**
+- **Backend validates and applies AI-generated instructions to the timeline JSON.**
+- **Frontend sends raw commands to the backend and updates state/UI based on structured responses.**
+- **Fallback/error handling and context-awareness strategies are implemented.**
+
+## How It Works
+1. User enters a free-form command in the UI (e.g., "cut out the part where the guy in the grey quarter zip is talking").
+2. Frontend sends the command to the backend (`/api/parseCommand`).
+3. Backend calls OpenAI's API with a prompt and schema, receives structured JSON.
+4. Backend validates the JSON and applies the edit to the timeline (and saves to Supabase).
+5. Updated timeline JSON is returned to the frontend, which updates state/UI and preview.
+6. If parsing fails or is ambiguous, the user receives a clear error or feedback message.
+
+## Command Schema Example
+```json
+{
+  "action": "cut",
+  "start": 5,
+  "end": 10
+}
+```
+Or for text overlay:
+```json
+{
+  "action": "add_text",
+  "start": 10,
+  "end": 15,
+  "text": "Welcome to the channel"
+}
+```
+Multiple actions can be represented as an array of such objects.
+
+## User Instructions (New)
+- **Type any natural language command describing your edit.**
+  - Examples:
+    - "Cut out the part where the guy in the grey quarter zip is talking."
+    - "Add title text from 10 to 15 that says 'Welcome to the channel'."
+    - "Overlay the logo from 5s to 10s."
+    - "Trim the first 5 seconds."
+    - "Remove the intro."
+- The system will interpret your intent and update the timeline accordingly.
+- If your command is ambiguous or cannot be understood, you'll receive a helpful error or feedback message.
+- Undo/redo and command history are supported for all edits.
+
+## Error Handling & Fallbacks
+- If the AI output is incomplete or ambiguous, the backend will not apply the edit and will return a clear error message.
+- If the OpenAI API is unreachable, a fallback parser may be used for simple commands, but this is not guaranteed.
+- All errors are handled gracefully, and the user is guided to rephrase or clarify as needed.
+
+## Extensibility
+- New command types and schema changes can be handled by updating the AI prompt and backend validation logic, not by writing new regexes.
+- The system is designed for future context-awareness (e.g., content tags, transcript integration) and collaborative editing.
+
+## Deprecated (Legacy) Approach
+- The previous spaCy/regex-based parser is deprecated and will be removed after migration is complete. All new features and bugfixes should target the AI-powered system.
+
 ## Current Status (2024-06-10)
 - Core data structures (timeline, tracks, clips, effects, transitions) are robust, extensible, and fully tested.
 - Compound/nested clips are supported, with recursive timeline operations (trim, join, remove, move, transitions).

@@ -80,51 +80,36 @@ To connect a domain, navigate to Project > Settings > Domains and click Connect 
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
 
-## 📝 How to Use Natural Language Video Editing Commands
+## 📝 How to Use Natural Language Video Editing Commands (AI-Powered)
 
-You can control the video editor using natural language commands in the chat panel. Here's how to structure your input for best results:
+You can now control the video editor using **free-form, natural language commands** in the chat panel. The system is powered by OpenAI's GPT-4 (or similar), so you can type instructions as you would describe them to a person.
 
-### Supported Command Types & Examples
+### How It Works
+- Type any edit instruction in your own words. The AI will interpret your intent and apply the edit to the timeline.
+- The backend validates and applies the edit, and the UI updates instantly.
+- If your command is ambiguous or cannot be understood, you'll receive a helpful error or feedback message.
 
-#### 1. **Cut**
-- **Format:** `cut [first|last|clip N] clip at [time]`
-- **Examples:**
-  - `cut first clip at 00:05`
-  - `cut last clip at 00:10`
-  - `cut clip 2 at 00:15`
+### Examples of Supported Commands
+- "Cut out the part where the guy in the grey quarter zip is talking."
+- "Add title text from 10 to 15 that says 'Welcome to the channel'."
+- "Overlay the logo from 5s to 10s."
+- "Trim the first 5 seconds."
+- "Remove the intro."
+- "Add text 'Subscribe!' at the bottom from 00:20 to 00:25."
 
-#### 2. **Trim**
-- **Format:** `trim [first|last|clip N] clip [to|from] [time]`
-- **Examples:**
-  - `trim first clip to 00:10` (keeps only up to 10s)
-  - `trim last clip from 00:05` (removes everything before 5s)
-  - `trim clip 2 to 00:20`
+### Tips for Best Results
+- Be as descriptive as you like—no need to follow a strict format.
+- You can reference times, clip content, or describe what you want to change.
+- If the system needs clarification, it will ask or provide feedback.
+- Undo/redo and command history are supported for all edits.
 
-#### 3. **Add Text Overlay**
-- **Format:** `add text "[your text]" [at|from] [start time] [to [end time]]`
-- **Examples:**
-  - `add text "Hello World" at 00:05` (shows for 3s by default)
-  - `add text "Intro" from 00:02 to 00:07`
+### Error Handling & Feedback
+- If the AI cannot interpret your command, you'll get a clear error or suggestion to rephrase.
+- All errors are handled gracefully, and you are guided to clarify as needed.
 
-#### 4. **Add Image Overlay**
-- **Format:** `overlay [image.png] [at|from] [start time] [to [end time]]`
-- **Examples:**
-  - `overlay logo.png at 00:10` (shows for 3s by default)
-  - `overlay image.png from 00:04 to 00:06`
+### Deprecated: Rigid Command Syntax
+- The old rigid command formats (e.g., `cut [first|last|clip N] clip at [time]`) are no longer required.
+- You can now use natural language for all editing commands.
 
-### ⏱ Time Format
-- Use `mm:ss` (e.g., `01:23` for 1 minute 23 seconds) or `ss` (e.g., `15` for 15 seconds).
-- You can also use `hh:mm:ss` for longer videos.
-
-### 💡 Tips for Best Results
-- Be specific about which clip you want to edit (e.g., `first`, `last`, or `clip 2`).
-- For overlays, make sure the asset name matches an uploaded or available image.
-- If you make a mistake, use the Undo button or `undo` command.
-- The timeline and preview will update instantly for supported commands.
-
-### ⚠️ Limitations
-- Only the above command formats are currently supported.
-- More advanced commands (e.g., transitions, effects) may be added in the future.
-
-For more help, see the chat panel's quick actions or ask for examples!
+For more help, just type your question or ask for examples!
 

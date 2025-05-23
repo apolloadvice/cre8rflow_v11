@@ -17,7 +17,7 @@ export interface CommandResult {
 
 export const useCommand = () => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [lastResult, setLastResult] = useState<CommandResponse | null>(null);
+  const [lastResult, setLastResult] = useState<any>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -43,11 +43,6 @@ export const useCommand = () => {
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || "Unknown error";
       setError(msg);
-      toast({
-        title: "Error processing command",
-        description: msg,
-        variant: "destructive"
-      });
       return null;
     } finally {
       setIsProcessing(false);

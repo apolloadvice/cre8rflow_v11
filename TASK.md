@@ -1,5 +1,18 @@
 # NLP Video Editor Initial Tasks
 
+## 0. Major Upgrade: AI-Powered NLP Command Parsing (2024-06-15)
+- [ ] Replace regex-based NLP command parser with AI-powered (OpenAI GPT-4 or similar) system for free-form natural language command interpretation
+    - [ ] Define command schema and prompt format for AI output
+    - [ ] Integrate OpenAI API in backend; implement parse endpoint
+    - [ ] Refactor frontend to use new endpoint and update UI/UX for free-form commands
+    - [ ] Implement backend logic to validate and apply AI-generated instructions to timeline JSON
+    - [ ] Add fallback/error handling for ambiguous or failed parses
+    - [ ] (Optional) Add context-awareness for content-based commands in the future
+    - [ ] Thoroughly test with a range of natural language commands and edge cases
+    - [ ] Mark spaCy/regex parser as deprecated and remove after migration
+    - [ ] Update all user-facing instructions and documentation to reflect new workflow
+    - [ ] Document new schema-driven, AI-powered workflow and error handling
+
 ## 1. Project Setup and Infrastructure
 
 ### 1.1 Development Environment
