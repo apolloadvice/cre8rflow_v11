@@ -2,6 +2,79 @@
 
 This project is an NLP-based video editing tool that allows users to edit videos on a timeline using natural language commands.
 
+## Major Upgrade: AI-Powered NLP Command Parsing (2024-06-15)
+
+The command parser is now powered by OpenAI's GPT-4 (or similar), enabling robust, flexible natural language understanding. Users can enter free-form, conversational commands (even with typos or casual phrasing), and the system will interpret and apply the intended edits to the video timeline.
+
+- **Regex/spaCy-based parsing is deprecated.**
+- **All command parsing is routed through an OpenAI-powered backend endpoint.**
+- **A clear schema for AI output (edit intent JSON) is enforced.**
+- **Backend validates and applies AI-generated instructions to the timeline JSON.**
+- **Frontend sends raw commands to the backend and updates state/UI based on structured responses.**
+- **Fallback/error handling and context-awareness strategies are implemented.**
+
+## How It Works
+1. User enters a free-form command in the UI (e.g., "cut out the part where the guy in the grey quarter zip is talking").
+2. Frontend sends the command to the backend (`/api/parseCommand`).
+3. Backend calls OpenAI's API with a prompt and schema, receives structured JSON.
+4. Backend validates the JSON and applies the edit to the timeline (and saves to Supabase).
+5. Updated timeline JSON is returned to the frontend, which updates state/UI and preview.
+6. If parsing fails or is ambiguous, the user receives a clear error or feedback message.
+
+## Command Schema Example
+```json
+{
+  "action": "cut",
+  "start": 5,
+  "end": 10
+}
+```
+Or for text overlay:
+```json
+{
+  "action": "add_text",
+  "start": 10,
+  "end": 15,
+  "text": "Welcome to the channel"
+}
+```
+Multiple actions can be represented as an array of such objects.
+
+### Robust Cut Command Handling (2024-06-15)
+- The system now robustly distinguishes between:
+  - **Trim:** "cut out the first/last N seconds" (removes from start/end, no gap)
+  - **Gap:** "cut from X to Y seconds" (removes a middle segment, leaves a gap in the timeline)
+- The backend and LLM prompt/schema have been updated to support both cases, and the timeline is updated accordingly.
+- See tests for both scenarios in `/backend/tests/test_command_executor.py`.
+
+### Asset Duration Handling
+- The backend always fetches the latest version of the asset from Supabase to determine duration.
+- Fallback to 60s only occurs if no asset is found; otherwise, the correct duration is used for all commands.
+
+## User Instructions (New)
+- **Type any natural language command describing your edit.**
+  - Examples:
+    - "Cut out the part where the guy in the grey quarter zip is talking."
+    - "Add title text from 10 to 15 that says 'Welcome to the channel'."
+    - "Overlay the logo from 5s to 10s."
+    - "Trim the first 5 seconds."
+    - "Remove the intro."
+- The system will interpret your intent and update the timeline accordingly.
+- If your command is ambiguous or cannot be understood, you'll receive a helpful error or feedback message.
+- Undo/redo and command history are supported for all edits.
+
+## Error Handling & Fallbacks
+- If the AI output is incomplete or ambiguous, the backend will not apply the edit and will return a clear error message.
+- If the OpenAI API is unreachable, a fallback parser may be used for simple commands, but this is not guaranteed.
+- All errors are handled gracefully, and the user is guided to rephrase or clarify as needed.
+
+## Extensibility
+- New command types and schema changes can be handled by updating the AI prompt and backend validation logic, not by writing new regexes.
+- The system is designed for future context-awareness (e.g., content tags, transcript integration) and collaborative editing.
+
+## Deprecated (Legacy) Approach
+- The previous spaCy/regex-based parser is deprecated and will be removed after migration is complete. All new features and bugfixes should target the AI-powered system.
+
 ## Current Status (2024-06-10)
 - Core data structures (timeline, tracks, clips, effects, transitions) are robust, extensible, and fully tested.
 - Compound/nested clips are supported, with recursive timeline operations (trim, join, remove, move, transitions).
@@ -209,28 +282,25 @@ The backend exposes API endpoints for real-time timeline preview and export, rea
     "timeline": { /* Timeline as dict/JSON (see Timeline.to_dict()) */ }
   }
   ```
-- **Response:** `video/mp4` file (preview)
-- **Errors:**
-  - `400`: Invalid timeline or unsupported file type
-  - `500`: ffmpeg or rendering error
+- **Response:** `
 
-### POST /api/export
-- **Description:** Export the given timeline to a high-quality video file using ffmpeg. Returns a video file for download or further processing.
-- **Payload:**
-  ```json
-  {
-    "timeline": { /* Timeline as dict/JSON (see Timeline.to_dict()) */ }
-  }
-  ```
-  - Optional query param: `quality` (`high`, `medium`, `low`)
-- **Response:** `video/mp4` file (export)
-- **Errors:**
-  - `400`: Invalid timeline or unsupported file type
-  - `500`: ffmpeg or export error
+### Timeline Placement & Overlap Prevention (2024-12-19)
 
-**Both endpoints:**
-- Accept the full timeline state as input (including all tracks, clips, effects, transitions).
-- Return clear status/errors for UI feedback.
-- Schedule temporary files for deletion after response (safe for repeated use).
+The timeline now includes robust clip placement functionality that prevents overlapping clips on the same track:
 
-These endpoints are ready for real-time UI integration and can be triggered programmatically.
+- **Smart Positioning**: When dragging assets from the asset panel to the timeline, the system automatically finds the best available position
+- **Overlap Prevention**: Clips cannot overlap on the same track - if a drop position conflicts with existing clips, the system finds the next available spot
+- **Gap Detection**: The system intelligently fills gaps between clips when possible, rather than always placing at the end
+- **Visual Feedback**: Drag operations show visual feedback including drop zone highlighting and position indicators
+- **Multi-Track Support**: Clips on different tracks can occupy the same timeline position without conflict
+- **User Notification**: Users are informed when clips are repositioned to avoid overlaps
+
+#### Example Scenarios:
+- Drop at empty position → Clip placed at exact drop location
+- Drop overlapping existing clip → Clip placed after the overlapping clip
+- Drop with gap available → Clip placed in the gap if it fits
+- Drop on different track → No conflict, exact positioning maintained
+
+This functionality ensures a smooth editing experience where users can quickly add clips without manually avoiding overlaps.
+
+## User Instructions (New)

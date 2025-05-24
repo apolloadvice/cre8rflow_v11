@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import os
 from fastapi.responses import JSONResponse
 from supabase import create_client, Client
@@ -27,6 +27,33 @@ class UploadUrlRequest(BaseModel):
 class UploadUrlResponse(BaseModel):
     signedUrl: str
     path: str
+
+class AssetResponse(BaseModel):
+    id: str
+    path: str
+    original_name: str
+    duration: Optional[float] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    size: Optional[int] = None
+    mimetype: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+@router.get("/assets/list", response_model=List[AssetResponse])
+async def list_assets(request: Request):
+    """
+    List all registered assets from the Supabase assets table.
+    """
+    supabase = get_supabase_client()
+    try:
+        result = supabase.table("assets").select("*").order("updated_at", desc=True).execute()
+        if result.data:
+            return [AssetResponse(**asset) for asset in result.data]
+        else:
+            return []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Supabase error: {e}")
 
 @router.post("/upload-url", response_model=UploadUrlResponse)
 async def get_upload_url(payload: UploadUrlRequest, request: Request):

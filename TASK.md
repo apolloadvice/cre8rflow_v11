@@ -1,5 +1,18 @@
 # NLP Video Editor Initial Tasks
 
+## 0. Major Upgrade: AI-Powered NLP Command Parsing (2024-06-15)
+- [ ] Replace regex-based NLP command parser with AI-powered (OpenAI GPT-4 or similar) system for free-form natural language command interpretation
+    - [x] Define command schema and prompt format for AI output
+    - [x] Integrate OpenAI API in backend; implement parse endpoint
+    - [ ] Refactor frontend to use new endpoint and update UI/UX for free-form commands
+    - [x] Implement backend logic to validate and apply AI-generated instructions to timeline JSON
+    - [x] Add fallback/error handling for ambiguous or failed parses
+    - [ ] (Optional) Add context-awareness for content-based commands in the future
+    - [x] Thoroughly test with a range of natural language commands and edge cases
+    - [ ] Mark spaCy/regex parser as deprecated and remove after migration
+    - [x] Update all user-facing instructions and documentation to reflect new workflow
+    - [x] Document new schema-driven, AI-powered workflow and error handling
+
 ## 1. Project Setup and Infrastructure
 
 ### 1.1 Development Environment
@@ -254,18 +267,35 @@ Note: As of 2024-06-13, context awareness for TRIM and CUT is implemented and te
 ## 12. Workflow Gaps and Required Actions (2024-06-14)
 
 ### 12.1 Asset Management
-- [ ] Implement persistent asset storage (database or local storage)
-- [ ] Extract and store video metadata (duration, resolution, format) on upload
-- [ ] Display asset metadata in the UI
+- [x] Implement persistent asset storage (database or local storage)
+- [x] Extract and store video metadata (duration, resolution, format) on upload
+- [x] Display asset metadata in the UI
+- [x] **Completed 2024-12-19**: Full asset management system implemented with:
+  - Backend integration with `/api/assets/list` and `/api/assets/register` endpoints
+  - Automatic thumbnail generation from video first frame
+  - Proper drag & drop functionality from asset panel to timeline
+  - Asset synchronization between Supabase Storage and database
+  - Store integration for timeline operations (cut, trim, add text, overlay commands work with dropped assets)
+  - Duplicate prevention and upsert logic
 
 ### 12.2 Timeline Placement
-- [ ] Implement reliable drag-and-drop from asset panel to timeline
-- [ ] On drop, create a timeline clip with correct duration and metadata
-- [ ] Visually scale timeline clips based on video duration
-- [ ] Prevent overlapping clips on the same track
+- [x] Implement reliable drag-and-drop from asset panel to timeline
+- [x] On drop, create a timeline clip with correct duration and metadata
+- [x] Visually scale timeline clips based on video duration
+- [x] Prevent overlapping clips on the same track
+- [x] **Completed 2024-12-19**: Full timeline placement system implemented with:
+  - Reliable drag & drop from AssetPanel to Timeline tracks
+  - Clips created with correct duration and metadata from video assets
+  - Visual scaling based on clip duration (clips scale proportionally to timeline)
+  - Overlap prevention logic that automatically adjusts clip placement
+  - Visual feedback during drag operations (highlighted drop zones)
+  - Smart positioning that finds gaps between clips when possible
+  - User feedback when clips are repositioned to avoid overlaps
+  - Support for clips on different tracks at same time positions
+  - Comprehensive unit tests for overlap prevention scenarios
 
 ### 12.3 NLP Command System
-- [ ] Integrate a robust NLP parser (spaCy, GPT, or similar)
+- [ ] Integrate a robust NLP parser (GPT)
 - [ ] Improve command-to-action mapping (connect parser output to timeline operations)
 - [ ] Add error handling and user feedback for invalid/ambiguous commands
 - [ ] Display step-by-step feedback or "thinking" indicator during command processing
@@ -298,3 +328,10 @@ Note: As of 2024-06-13, context awareness for TRIM and CUT is implemented and te
 | Edit Application      | Not functional       | Implement timeline data updates, integrate video backend|
 | Real-Time Update      | Not functional       | Sync timeline/video UI after edits, real-time preview   |
 | Error Handling/UX     | Minimal              | Add error/confirmation messages, highlight changes      |
+
+## Discovered During Work
+- Fixed asset duration logic to always use latest version if duplicates exist (2024-06-15)
+- Robust handling of 'cut' commands (trim vs. gap) with LLM and backend logic (2024-06-15)
+- Added/updated unit tests for all cut scenarios (2024-06-15)
+- **Fixed Timeline Disappearing Issue (2024-12-19)**: Resolved critical bug where AI commands (like "add text") would completely clear the timeline. Issue was in `handleVideoProcessed` function which replaced all existing clips with a single processed video clip. Fixed to preserve timeline structure and only update video sources, plus improved AI command handling to prioritize timeline operations over processed video for better editing experience.
+- **Fixed Track Assignment Bug (2025-01-24)**: Resolved critical bug where text elements of the same type were being placed on different tracks despite not overlapping in time. Issue was in `applyOperationsToTimeline` function where operation effect types ("textOverlay") were being passed to `findBestTrack` instead of final clip types ("text"), causing the track assignment logic to treat each new element as a different type. Fixed by determining final clip type before calling track assignment logic.

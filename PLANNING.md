@@ -4,7 +4,8 @@
 - UI components for asset upload, timeline, and command input are present but not fully connected.
 - Asset upload lacks persistent storage and metadata extraction (duration, resolution, etc.).
 - Timeline drag-and-drop is incomplete; timeline does not visually represent clip duration or allow proper placement.
-- Command parsing is basic; lacks robust NLP, error handling, and feedback.
+- **Command parsing is now AI-powered (OpenAI GPT-4 or similar) and robust for all major edit types, including nuanced 'cut' commands (trim/gap).**
+- Asset duration is always fetched from the latest version in Supabase, avoiding fallback to 60s unless no asset exists.
 - No visible processing feedback or step-by-step user guidance.
 - Edits are not actually applied to timeline data or video; no real video processing or timeline update.
 - Timeline and video playback do not update after edits; no real-time preview of changes.
@@ -20,7 +21,7 @@
 ## Roadmap & Next Steps (2024-06-14)
 - Implement persistent asset management and metadata extraction
 - Complete drag-and-drop and timeline clip creation with correct scaling
-- Integrate robust NLP parser and map commands to timeline actions
+- Integrate robust NLP parser and map commands to timeline actions (now robust for 'cut' commands)
 - Add user feedback mechanisms (processing, confirmation, error)
 - Implement timeline data updates and video processing backend
 - Enable real-time timeline and video updates after edits
@@ -177,10 +178,11 @@ The NLP Video Editor is a specialized tool that enables users to edit video clip
 ## Challenges and Considerations
 
 ### Technical Challenges
-- Accurate parsing of ambiguous commands
+- Accurate parsing of ambiguous commands (now robust for 'cut' trim/gap distinction)
 - Performance optimization for video processing
 - Managing complex timeline operations
 - Cross-platform compatibility
+- Asset versioning/duplication is now handled by always using the latest version for duration
 
 ### UX Challenges
 - Training users to phrase commands effectively
@@ -238,3 +240,67 @@ The NLP Video Editor is a specialized tool that enables users to edit video clip
 - Improve natural language flexibility and context understanding
   - [x] Context awareness and natural time expressions for all major commands (2024-06-13)
   - [ ] Add context/time support for future commands (MOVE, DUPLICATE, DELETE, REPLACE, etc.)
+
+## Major Upgrade: AI-Powered NLP Command Parsing (2024-06-15)
+
+### Overview
+The project is transitioning from a regex/spaCy-based command parser to a robust AI-powered natural language understanding system using OpenAI's API (GPT-4 or similar). This will allow users to enter free-form, flexible commands (even with typos or casual language), which are interpreted into structured timeline edit instructions. The backend will validate and apply these instructions to the timeline JSON, maintaining compatibility with the existing video editing pipeline and Supabase storage.
+
+### Key Changes
+- **Regex/spaCy-based parsing is deprecated.**
+- **All command parsing will be routed through an OpenAI-powered endpoint.**
+- **A clear schema for AI output (edit intent JSON) is defined and enforced.**
+- **Backend validates and applies AI-generated instructions to the timeline JSON.**
+- **Frontend sends raw commands to the backend and handles structured responses.**
+- **Fallback/error handling and context-awareness strategies are implemented.**
+
+### New Data Flow
+1. User enters a free-form command in the UI.
+2. Frontend sends the command to a backend endpoint (e.g., `/api/parseCommand`).
+3. Backend calls OpenAI's API with a prompt and schema, receives structured JSON.
+4. Backend validates the JSON and applies the edit to the timeline (and saves to Supabase).
+5. Updated timeline JSON is returned to the frontend, which updates state/UI and preview.
+6. If parsing fails or is ambiguous, the user receives a clear error or feedback message.
+
+### Command Schema Example
+```json
+{
+  "action": "cut",
+  "start": 5,
+  "end": 10
+}
+```
+Or for text overlay:
+```json
+{
+  "action": "add_text",
+  "start": 10,
+  "end": 15,
+  "text": "Welcome to the channel"
+}
+```
+Multiple actions can be represented as an array of such objects.
+
+### Implementation Steps
+1. **Define schema and prompt format for AI output.**
+2. **Integrate OpenAI API in backend; implement parse endpoint.**
+3. **Refactor frontend to use new endpoint and update UI/UX for free-form commands.**
+4. **Implement backend logic to validate and apply AI-generated instructions to timeline JSON.**
+5. **Add fallback/error handling for ambiguous or failed parses.**
+6. **(Optional) Add context-awareness for content-based commands in the future.**
+7. **Thoroughly test with a range of natural language commands and edge cases.**
+
+### Impact on Technical Architecture
+- **Frontend:** No longer relies on rigid command syntax; UI encourages natural language. Command input sends raw text to backend and handles structured responses.
+- **Backend:** Centralizes command parsing and timeline updates. All business logic for validation and application of edits is handled server-side. OpenAI API integration is required.
+- **Timeline JSON:** Remains the single source of truth; all edits are reflected here and synced with Supabase.
+- **Error Handling:** Robust feedback for ambiguous, incomplete, or failed commands. Fallbacks and user guidance are prioritized.
+- **Extensibility:** New command types and schema changes can be handled by updating the AI prompt and backend validation logic, not by writing new regexes.
+
+### Deprecated (Legacy) Approach
+- The previous spaCy/regex-based parser is deprecated and will be removed after migration is complete. All new features and bugfixes should target the AI-powered system.
+
+### Future Directions
+- Add richer context-awareness (e.g., content tags, transcript integration) to support commands like "cut out the part where the guy in the grey quarter zip is talking."
+- Enable collaborative editing and real-time sync as needed.
+- Continue to expand the schema and prompt as new editing features are added.

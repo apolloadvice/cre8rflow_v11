@@ -155,8 +155,9 @@ export async function sendCommand(asset_path: string, command: string) {
   }
   const payload = { asset_path, command };
   console.log("DEBUG sendCommand payload", payload);
-  const res = await axios.post('/api/command', payload);
-  return res.data;
+  console.log("DEBUG sendCommand URL:", API_BASE_URL + '/command');
+  const res = await axios.post(API_BASE_URL + '/command', payload);
+  return res;
 }
 
 export const uploadVideo = async (file: File): Promise<string> => {
@@ -171,4 +172,27 @@ export const uploadVideo = async (file: File): Promise<string> => {
 export async function saveTimeline(asset_path: string, timeline: any) {
   const res = await axios.post('/api/timeline/save', { asset_path, timeline });
   return res.data;
+} 
+
+/**
+ * Calls the backend AI parser to convert a natural language command into a structured JSON intent.
+ * @param command - The user's raw command string
+ * @param asset_path - The path to the asset associated with the command
+ * @returns { parsed: any, error?: string }
+ */
+export async function parseCommand(command: string, asset_path: string): Promise<{ parsed: any; error?: string }> {
+  try {
+    const res = await axios.post(API_BASE_URL + '/parseCommand', { command, asset_path });
+    return res.data;
+  } catch (err: any) {
+    if (err.response && err.response.data && err.response.data.error) {
+      return { parsed: null, error: err.response.data.error };
+    }
+    return { parsed: null, error: err.message || 'Unknown error' };
+  }
+} 
+
+export async function updateAssetDuration(asset_path: string, duration: number) {
+  const payload = { asset_path, duration };
+  return axios.post('/api/asset/updateDuration', payload);
 } 

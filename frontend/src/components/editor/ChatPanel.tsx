@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ArrowUp, Bot } from "lucide-react";
 import { useCommand } from "@/hooks/useCommand";
 import { useEditorStore } from "@/store/editorStore";
-import { sendCommand } from "@/api/apiClient";
+import { parseCommand } from "@/api/apiClient";
 import { useToast } from "@/components/ui/use-toast";
 import { simulateCutCommand, simulateOptimisticEdit } from "@/utils/optimisticEdit";
 
@@ -36,6 +36,7 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [status, setStatus] = useState<string | null>(null); // New: step-by-step status
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { executeCommand, isProcessing, logs, error } = useCommand();
   const clips = useEditorStore((state) => state.clips);
@@ -46,7 +47,41 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, status]);
+
+  // Helper to summarize parsed command in friendly language
+  function summarizeParsed(parsed: any, userInput: string): string {
+    if (!parsed) return "";
+    if (Array.isArray(parsed)) {
+      return parsed.map((p) => summarizeParsed(p, userInput)).join(" and ");
+    }
+    switch (parsed.action) {
+      case "cut":
+        return `cut out the part from ${parsed.start} to ${parsed.end} seconds`;
+      case "add_text":
+        return `add text '${parsed.text}' from ${parsed.start} to ${parsed.end} seconds${parsed.position ? ` at the ${parsed.position}` : ""}`;
+      case "overlay":
+        return `overlay '${parsed.asset}' from ${parsed.start} to ${parsed.end} seconds${parsed.position ? ` in the ${parsed.position}` : ""}`;
+      default:
+        return userInput;
+    }
+  }
+
+  // Helper to generate a varied final assistant message
+  function getCompletionMessage(summary: string): string {
+    const completions = [
+      (s: string) => `All done! I ${s}, just like you asked. What would you like to edit next?`,
+      (s: string) => `Finished! Your edit (${s}) is complete. Need anything else?`,
+      (s: string) => `That's done: I ${s}. What's your next edit?`,
+      (s: string) => `I've made the change: ${s}. What would you like to do now?`,
+      (s: string) => `Edit complete! I ${s}. Ready for another change?`,
+      (s: string) => `Done! I ${s}. Let me know what you'd like to do next.`,
+      (s: string) => `Your edit is finished: ${s}. What else can I help with?`,
+      (s: string) => `I've taken care of it: ${s}. Want to make another edit?`,
+    ];
+    const idx = Math.floor(Math.random() * completions.length);
+    return completions[idx](summary);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,59 +95,94 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
     };
 
     setMessages((prevMessages) => [...prevMessages, userMessage]);
-    onChatCommand(input);
-    setInput("");
     setIsThinking(true);
+    setStatus("Got it! Let me figure out what you want to do…");
 
     // Ensure we pass only the file_path string
     const assetPath = activeVideoAsset?.file_path;
-    console.log("activeVideoAsset", activeVideoAsset);
-    console.log("file_path", activeVideoAsset?.file_path, typeof activeVideoAsset?.file_path);
     if (!assetPath || typeof assetPath !== "string" || assetPath.length < 5) {
+      setStatus(null);
       toast({ variant: "destructive", description: "No valid video selected or uploaded." });
       setIsThinking(false);
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString() + "-assistant",
+        content: "I couldn't find a valid video to edit. Please upload or select a video first.",
+        sender: "assistant",
+        timestamp: new Date(),
+      }]);
       return;
     }
 
-    // --- Optimistic UI update for supported commands ---
-    const prevClips = [...clips]; // Save previous state for rollback
-    const optimisticClips = simulateOptimisticEdit(input, clips);
-    console.log('[ChatPanel] simulateOptimisticEdit:', input, optimisticClips);
-    let optimisticallyUpdated = false;
-    if (optimisticClips !== clips) {
-      setClips(optimisticClips);
-      optimisticallyUpdated = true;
-      console.log('[ChatPanel] After optimistic setClips:', optimisticClips);
+    // Step 1: Parsing
+    setStatus("I'm reading your instructions…");
+    const { parsed, error } = await parseCommand(input, assetPath);
+    if (error) {
+      setStatus(null);
+      toast({ variant: "destructive", description: error });
+      setIsThinking(false);
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString() + "-assistant",
+        content: `Hmm, I couldn't understand that. Could you rephrase? (${error})`,
+        sender: "assistant",
+        timestamp: new Date(),
+      }]);
+      return;
     }
+    if (!parsed) {
+      setStatus(null);
+      setIsThinking(false);
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString() + "-assistant",
+        content: `Hmm, I couldn't understand that. Could you rephrase?`,
+        sender: "assistant",
+        timestamp: new Date(),
+      }]);
+      return;
+    }
+
+    // Step 2: Show what was understood
+    const summary = summarizeParsed(parsed, input);
+    setStatus(`I understood: ${summary.charAt(0).toUpperCase() + summary.slice(1)}.`);
+    await new Promise((res) => setTimeout(res, 400)); // brief pause for UX
+    setStatus("Applying your edit to the video…");
+
+    // --- Optimistic UI update disabled since backend returns complete timeline ---
+    // const prevClips = [...clips];
+    // const optimisticClips = simulateOptimisticEdit(input, clips);
+    // let optimisticallyUpdated = false;
+    // if (optimisticClips !== clips) {
+    //   setClips(optimisticClips);
+    //   optimisticallyUpdated = true;
+    // }
     // --- End optimistic update ---
 
     try {
-      const response = await sendCommand(assetPath, input);
+      // Let useAICommands handle the backend communication instead of duplicate API calls
+      // This prevents the timeline disappearing issue that was caused by:
+      // 1. ChatPanel optimistic edit adding clips
+      // 2. ChatPanel calling sendCommand directly  
+      // 3. useAICommands.handleChatCommand also calling sendCommand via executeCommand
+      // 4. Both responses trying to update timeline, causing conflicts
+      console.log("🎬 [ChatPanel] Calling onChatCommand with:", input);
+      await onChatCommand(input);
+      
+      setStatus(null);
+      setIsThinking(false);
       toast({ description: "Edit applied ✔️" });
-
-      // Update timeline state and UI with backend response
-      if (response && response.timeline) {
-        const newClips = [];
-        const frameRate = response.timeline.frame_rate || 30;
-        for (const track of response.timeline.tracks) {
-          // Map track_type string to track index (optional, or keep as string)
-          const trackType = track.track_type;
-          for (const clip of track.clips) {
-            newClips.push({
-              id: clip.clip_id || clip.id || clip.name, // prefer clip_id
-              start: typeof clip.start === 'number' ? clip.start / frameRate : 0,
-              end: typeof clip.end === 'number' ? clip.end / frameRate : 0,
-              track: typeof trackType === 'number' ? trackType : undefined, // or map to index if needed
-              type: clip.type || trackType,
-              name: clip.name,
-              file_path: clip.file_path,
-            });
-          }
-        }
-        console.log('[ChatPanel] After backend response, newClips:', newClips);
-        setClips(newClips);
-      }
+      setInput(""); // Clear input after success
+      
+      // Final assistant message
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString() + "-assistant",
+        content: getCompletionMessage(summary),
+        sender: "assistant",
+        timestamp: new Date(),
+      }]);
     } catch (err: any) {
+      console.error("🎬 [ChatPanel] Error during command processing:", err);
+      setStatus(null);
+      setIsThinking(false);
+      
       let message = "Unknown error";
       if (err?.response?.data?.detail) {
         if (Array.isArray(err.response.data.detail)) {
@@ -125,13 +195,26 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
       } else {
         message = JSON.stringify(err);
       }
-      // --- Rollback optimistic update on error ---
-      if (optimisticallyUpdated) {
-        setClips(prevClips);
-      }
-      toast({ variant: "destructive", description: message });
+      
+      // Revert optimistic edit if there was an error
+      // if (optimisticallyUpdated) {
+      //   console.log("🎬 [ChatPanel] Reverting optimistic edit due to error");
+      //   setClips(prevClips);
+      // }
+      
+      toast({ 
+        variant: "destructive", 
+        title: "Command Error",
+        description: message 
+      });
+      
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString() + "-assistant",
+        content: `Sorry, something went wrong while processing your command: ${message}`,
+        sender: "assistant",
+        timestamp: new Date(),
+      }]);
     }
-    setIsThinking(false);
   };
 
   const handleQuickAction = (action: string) => {
@@ -187,14 +270,11 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
                 {message.content}
               </div>
             ))}
-            {isThinking && (
-              <div className="bg-cre8r-gray-700 text-white self-start max-w-[90%] rounded-lg p-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" style={{ animationDelay: "0.2s" }}></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" style={{ animationDelay: "0.4s" }}></div>
-                  <span className="ml-1 text-sm">Processing your edit request</span>
-                </div>
+            {/* Step-by-step assistant status (thinking) block */}
+            {isThinking && status && (
+              <div className="bg-cre8r-gray-600 text-cre8r-gray-200 self-start max-w-[90%] rounded-lg p-3 text-sm italic flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                <span>{status}</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -221,7 +301,7 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
           </div>
           <form className="flex w-full items-center gap-2" onSubmit={handleSubmit}>
             <Input
-              placeholder="Tell me what edits to apply to your video..."
+              placeholder="Tell me what edits to apply to your video... (e.g. 'cut 0-5', 'add text at 10s saying Welcome')"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="bg-cre8r-gray-700 border-cre8r-gray-600 focus:border-cre8r-violet focus:ring-cre8r-violet"

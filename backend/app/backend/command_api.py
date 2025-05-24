@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Body
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from app.command_parser import CommandParser
@@ -9,6 +9,7 @@ import logging
 from supabase import create_client, Client
 import os
 import json
+from app.llm_parser import parse_command_with_llm
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -38,13 +39,14 @@ def load_timeline_from_db(asset_path: str):
 def get_asset_duration(asset_path: str) -> float:
     """
     Fetch the duration (in seconds) for the asset from the assets table in Supabase.
-    Returns None if not found or not available.
+    Returns None if not found or not available. Uses the latest version if multiple exist.
     """
     supabase = get_supabase_client()
     try:
-        result = supabase.table("assets").select("duration").eq("path", asset_path).single().execute()
-        if result.data and result.data.get("duration"):
-            return float(result.data["duration"])
+        # Fetch all rows for the asset path, order by updated_at descending, and use the latest
+        result = supabase.table("assets").select("duration,updated_at").eq("path", asset_path).order("updated_at", desc=True).limit(1).execute()
+        if result.data and len(result.data) > 0 and result.data[0].get("duration"):
+            return float(result.data[0]["duration"])
     except Exception as e:
         logging.warning(f"[get_asset_duration] Could not fetch duration for {asset_path}: {e}")
     return None
@@ -112,3 +114,60 @@ async def apply_command(payload: CommandRequest):
         "message": getattr(exec_result, 'message', "Command applied."),
         "logs": getattr(exec_result, 'logs', []),
     } 
+
+class ParseCommandRequest(BaseModel):
+    command: str
+    asset_path: str = None
+
+class ParseCommandResponse(BaseModel):
+    parsed: Any
+    error: str = None
+
+@router.post("/parseCommand", response_model=ParseCommandResponse)
+async def parse_command(payload: ParseCommandRequest):
+    """
+    Receives a natural language command and returns the parsed intent JSON using the LLM parser.
+    """
+    logging.info(f"[parse_command] Received command: '{payload.command}'")
+    duration = None
+    if payload.asset_path:
+        duration = get_asset_duration(payload.asset_path)
+    if duration is None:
+        duration = 60.0  # fallback default
+    logging.info(f"[parse_command] Using duration={duration} for asset_path={payload.asset_path}")
+    parsed, error = parse_command_with_llm(payload.command, duration=duration)
+    # Clamp cut command times if present
+    if parsed and isinstance(parsed, dict) and parsed.get("action") == "cut":
+        start = parsed.get("start")
+        end = parsed.get("end")
+        # Clamp to [0, duration]
+        if start is not None and end is not None:
+            start = max(0, min(float(start), duration))
+            end = max(0, min(float(end), duration))
+            if start >= end:
+                return ParseCommandResponse(parsed=None, error=f"Invalid cut range: start ({start}) must be less than end ({end}) and within video duration ({duration}s). Please rephrase your command.")
+            parsed["start"] = start
+            parsed["end"] = end
+    if error:
+        logging.warning(f"[parse_command] Error: {error}")
+        return ParseCommandResponse(parsed=None, error=error)
+    logging.info(f"[parse_command] Parsed result: {parsed}")
+    return ParseCommandResponse(parsed=parsed) 
+
+class UpdateAssetDurationRequest(BaseModel):
+    asset_path: str
+    duration: float
+
+@router.post("/asset/updateDuration")
+async def update_asset_duration(payload: UpdateAssetDurationRequest):
+    """
+    Upsert the duration for a given asset_path in the assets table.
+    """
+    supabase = get_supabase_client()
+    try:
+        upsert_payload = {"path": payload.asset_path, "duration": payload.duration}
+        result = supabase.table("assets").upsert(upsert_payload).execute()
+        return {"status": "ok", "updated": True}
+    except Exception as e:
+        logging.error(f"[update_asset_duration] Supabase upsert error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update asset duration.") 

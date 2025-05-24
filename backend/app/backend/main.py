@@ -1,3 +1,12 @@
+from dotenv import load_dotenv
+load_dotenv(override=True)
+from pathlib import Path
+import os
+
+env_path = Path(__file__).resolve().parent.parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+print("DEBUG OPENAI_API_KEY:", os.getenv("OPENAI_API_KEY"))
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.backend.preview_api import router as preview_router

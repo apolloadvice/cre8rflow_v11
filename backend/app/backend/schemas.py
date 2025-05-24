@@ -1,4 +1,5 @@
 from pydantic import BaseModel, constr
+from typing import Any, Optional
 
 class CommandRequest(BaseModel):
     """
@@ -10,3 +11,10 @@ class CommandRequest(BaseModel):
 class CommandResponse(BaseModel):
     status: str  # "ok"
     applied: bool 
+
+class ParseCommandRequest(BaseModel):
+    command: str
+
+class ParseCommandResponse(BaseModel):
+    parsed: Any
+    error: Optional[str] = None 
