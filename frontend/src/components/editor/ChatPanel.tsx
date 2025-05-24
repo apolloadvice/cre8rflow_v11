@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ArrowUp, Bot } from "lucide-react";
 import { useCommand } from "@/hooks/useCommand";
 import { useEditorStore } from "@/store/editorStore";
-import { sendCommand, parseCommand } from "@/api/apiClient";
+import { parseCommand } from "@/api/apiClient";
 import { useToast } from "@/components/ui/use-toast";
 import { simulateCutCommand, simulateOptimisticEdit } from "@/utils/optimisticEdit";
 
@@ -95,7 +95,6 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
     };
 
     setMessages((prevMessages) => [...prevMessages, userMessage]);
-    onChatCommand(input);
     setIsThinking(true);
     setStatus("Got it! Let me figure out what you want to do…");
 
@@ -147,42 +146,31 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
     await new Promise((res) => setTimeout(res, 400)); // brief pause for UX
     setStatus("Applying your edit to the video…");
 
-    // --- Optimistic UI update for supported commands (optional, can be removed if not desired) ---
-    const prevClips = [...clips];
-    const optimisticClips = simulateOptimisticEdit(input, clips);
-    let optimisticallyUpdated = false;
-    if (optimisticClips !== clips) {
-      setClips(optimisticClips);
-      optimisticallyUpdated = true;
-    }
+    // --- Optimistic UI update disabled since backend returns complete timeline ---
+    // const prevClips = [...clips];
+    // const optimisticClips = simulateOptimisticEdit(input, clips);
+    // let optimisticallyUpdated = false;
+    // if (optimisticClips !== clips) {
+    //   setClips(optimisticClips);
+    //   optimisticallyUpdated = true;
+    // }
     // --- End optimistic update ---
 
     try {
-      // Now send the original command to backend for application (could also send parsed if backend supports it)
-      const response = await sendCommand(assetPath, input);
+      // Let useAICommands handle the backend communication instead of duplicate API calls
+      // This prevents the timeline disappearing issue that was caused by:
+      // 1. ChatPanel optimistic edit adding clips
+      // 2. ChatPanel calling sendCommand directly  
+      // 3. useAICommands.handleChatCommand also calling sendCommand via executeCommand
+      // 4. Both responses trying to update timeline, causing conflicts
+      console.log("🎬 [ChatPanel] Calling onChatCommand with:", input);
+      await onChatCommand(input);
+      
       setStatus(null);
       setIsThinking(false);
       toast({ description: "Edit applied ✔️" });
-      if (response && response.timeline) {
-        const newClips = [];
-        const frameRate = response.timeline.frame_rate || 30;
-        for (const track of response.timeline.tracks) {
-          const trackType = track.track_type;
-          for (const clip of track.clips) {
-            newClips.push({
-              id: clip.clip_id || clip.id || clip.name,
-              start: typeof clip.start === 'number' ? clip.start / frameRate : 0,
-              end: typeof clip.end === 'number' ? clip.end / frameRate : 0,
-              track: typeof trackType === 'number' ? trackType : undefined,
-              type: clip.type || trackType,
-              name: clip.name,
-              file_path: clip.file_path,
-            });
-          }
-        }
-        setClips(newClips);
-      }
       setInput(""); // Clear input after success
+      
       // Final assistant message
       setMessages((prev) => [...prev, {
         id: Date.now().toString() + "-assistant",
@@ -191,8 +179,10 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
         timestamp: new Date(),
       }]);
     } catch (err: any) {
+      console.error("🎬 [ChatPanel] Error during command processing:", err);
       setStatus(null);
       setIsThinking(false);
+      
       let message = "Unknown error";
       if (err?.response?.data?.detail) {
         if (Array.isArray(err.response.data.detail)) {
@@ -205,13 +195,22 @@ const ChatPanel = ({ onChatCommand, onVideoProcessed }: ChatPanelProps) => {
       } else {
         message = JSON.stringify(err);
       }
-      if (optimisticallyUpdated) {
-        setClips(prevClips);
-      }
-      toast({ variant: "destructive", description: message });
+      
+      // Revert optimistic edit if there was an error
+      // if (optimisticallyUpdated) {
+      //   console.log("🎬 [ChatPanel] Reverting optimistic edit due to error");
+      //   setClips(prevClips);
+      // }
+      
+      toast({ 
+        variant: "destructive", 
+        title: "Command Error",
+        description: message 
+      });
+      
       setMessages((prev) => [...prev, {
         id: Date.now().toString() + "-assistant",
-        content: `Sorry, something went wrong: ${message}`,
+        content: `Sorry, something went wrong while processing your command: ${message}`,
         sender: "assistant",
         timestamp: new Date(),
       }]);

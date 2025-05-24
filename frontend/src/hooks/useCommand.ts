@@ -32,18 +32,30 @@ export const useCommand = () => {
 
     const assetPath = activeVideoAsset?.file_path;
     if (!assetPath || typeof assetPath !== "string") {
-      throw new Error("No valid video asset selected");
+      const errorMsg = "No valid video asset selected";
+      setError(errorMsg);
+      throw new Error(errorMsg);
     }
 
     try {
+      console.log("🎬 [useCommand] Calling sendCommand with:", { assetPath, commandText });
       const res = await sendCommand(assetPath, commandText);
-      setLastResult(res.data);
-      setLogs(res.data.logs || []);
-      return res.data;
+      console.log("🎬 [useCommand] sendCommand response:", res);
+      
+      const responseData = res.data;
+      setLastResult(responseData);
+      setLogs(responseData.logs || []);
+      
+      console.log("🎬 [useCommand] Returning response data:", responseData);
+      return responseData;
     } catch (err: any) {
+      console.error("🎬 [useCommand] Error in sendCommand:", err);
       const msg = err.response?.data?.detail || err.message || "Unknown error";
       setError(msg);
-      return null;
+      
+      // Re-throw the error instead of returning null
+      // This allows calling code to handle the error appropriately
+      throw new Error(msg);
     } finally {
       setIsProcessing(false);
     }

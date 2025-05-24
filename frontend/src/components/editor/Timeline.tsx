@@ -38,26 +38,20 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   console.log('[Timeline] RENDER');
 
   // Debug: log clips prop on every render
-  console.log("[Timeline] clips prop:", clips);
+  console.log("🎬 [Timeline] clips prop:", clips);
+  console.log("🎬 [Timeline] clips length:", clips.length);
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const trackCount = 6;
   const [thumbnailsVisible, setThumbnailsVisible] = useState(true);
   const [isDraggingHandle, setIsDraggingHandle] = useState<{ clipId: string; handle: 'start' | 'end' } | null>(null);
   
   // Use the forwarded ref or fall back to internal ref
   const resolvedRef = (ref as React.RefObject<HTMLDivElement>) || timelineRef;
   
-  // Track labels
-  const trackLabels = [
-    "Video",
-    "Text",
-    "Audio",
-    "Effects",
-    "Format",
-    "Other"
-  ];
+  // Calculate dynamic track count based on clips
+  const maxTrack = clips.length > 0 ? Math.max(...clips.map(clip => clip.track)) : 0;
+  const trackCount = Math.max(maxTrack + 1, 3); // Minimum 3 tracks, expand as needed
 
   // Format time as mm:ss
   const formatTime = (seconds: number) => {
@@ -87,6 +81,12 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   // Get color for clip based on type
   const getClipStyle = (type?: string) => {
     switch (type) {
+      case "text":
+        return "from-green-700 to-green-500";  // Green for text elements
+      case "overlay":
+        return "from-orange-700 to-orange-500";  // Orange for overlay elements
+      case "video":
+        return "from-cre8r-violet-dark to-cre8r-violet";  // Keep purple for video
       case "trim":
         return "from-blue-700 to-blue-500";
       case "highlight":
@@ -110,9 +110,9 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
       case "brightness":
         return "from-sky-700 to-sky-500";
       case "textOverlay":
-        return "from-fuchsia-700 to-fuchsia-500";
+        return "from-green-700 to-green-500";  // Also green for consistency with text
       default:
-        return "from-cre8r-violet-dark to-cre8r-violet";
+        return "from-cre8r-violet-dark to-cre8r-violet";  // Default purple for video elements
     }
   };
 
@@ -147,12 +147,23 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
     e.preventDefault();
     const target = e.currentTarget as HTMLDivElement;
     target.style.backgroundColor = "rgba(139, 92, 246, 0.1)"; // Highlight drop zone
+    
+    // Show a visual indicator of where the clip would be placed
+    const rect = resolvedRef.current?.getBoundingClientRect();
+    if (rect) {
+      const x = e.clientX - rect.left;
+      const dropTime = (x / rect.width) * duration;
+      target.style.borderLeft = "2px solid rgba(139, 92, 246, 0.8)";
+      target.style.borderLeftStyle = "dashed";
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const target = e.currentTarget as HTMLDivElement;
     target.style.backgroundColor = "";
+    target.style.borderLeft = "";
+    target.style.borderLeftStyle = "";
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, trackIndex: number) => {
@@ -195,16 +206,14 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
               onVideoAssetDrop?.(asset.asset, trackIndex, dropTime);
             }
           } else {
-            // This is a regular video asset drop
-            const videoAsset = JSON.parse(assetData);
-            
+            // This is a regular video asset drop (from AssetPanel)
             const rect = resolvedRef.current?.getBoundingClientRect();
             if (!rect) return;
 
             const x = e.clientX - rect.left;
             const dropTime = (x / rect.width) * duration;
             
-            onVideoAssetDrop?.(videoAsset, trackIndex, dropTime);
+            onVideoAssetDrop?.(asset, trackIndex, dropTime);
           }
         }
       } catch (error) {
@@ -334,111 +343,59 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
             {generateTimeMarkers()}
           </div>
 
-          {/* Tracks with labels */}
+          {/* Tracks without labels - full width */}
           <div className="flex flex-col gap-1">
             {Array.from({ length: trackCount }).map((_, index) => (
-              <div key={index} className="flex">
-                <div className="w-20 h-12 flex items-center justify-center bg-cre8r-gray-800 border-r border-cre8r-gray-700 text-xs text-cre8r-gray-300 font-medium">
-                  {trackLabels[index] || `Track ${index + 1}`}
-                </div>
-                <div 
-                  className="flex-1 h-12 bg-cre8r-gray-800 rounded-r border border-cre8r-gray-700 relative"
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, index)}
-                >
-                  {/* Render video/audio/effect clips for this track */}
-                  {clips.filter(clip => clip.track === index && clip.type !== "text" && clip.type !== "overlay").map((clip) => (
-                    <div
-                      key={clip.id}
-                      className={cn(
-                        "video-timeline-marker absolute h-10 my-1 rounded overflow-hidden cursor-pointer hover:opacity-100 transition-opacity",
-                        selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0"
-                      )}
-                      style={{
-                        left: `${(clip.start / duration) * 100}%`,
-                        width: `${((clip.end - clip.start) / duration) * 100}%`,
-                        ...getThumbnailStyle(clip)
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('[Timeline] Video/other clip clicked:', clip.id, clip.type);
-                        onClipSelect?.(clip.id);
-                      }}
-                      title={clip.name || "Edit"}
-                    >
-                      <div className={`h-full w-full bg-gradient-to-r ${getClipStyle(clip.type)} flex items-center justify-center px-2 bg-opacity-70`}>
-                        <span className="text-xs text-white truncate font-medium">
-                          {clip.name || formatTime(clip.end - clip.start)}
-                        </span>
-                      </div>
-                      {/* Left trim handle */}
-                      <div 
-                        className="absolute left-0 top-0 bottom-0 w-3 hover:bg-white hover:bg-opacity-30 cursor-w-resize z-10"
-                        onMouseDown={(e) => handleTrimHandleMouseDown(e, clip.id, 'start')}
-                        title="Trim start"
-                      >
-                        <div className="h-full w-1 bg-white opacity-60 mx-auto"></div>
-                      </div>
-                      {/* Right trim handle */}
-                      <div 
-                        className="absolute right-0 top-0 bottom-0 w-3 hover:bg-white hover:bg-opacity-30 cursor-e-resize z-10"
-                        onMouseDown={(e) => handleTrimHandleMouseDown(e, clip.id, 'end')}
-                        title="Trim end"
-                      >
-                        <div className="h-full w-1 bg-white opacity-60 mx-auto"></div>
-                      </div>
+              <div 
+                key={index}
+                className="w-full h-12 bg-cre8r-gray-800 rounded border border-cre8r-gray-700 relative"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+              >
+                {/* Render all clips for this track */}
+                {clips.filter(clip => clip.track === index).map((clip) => (
+                  <div
+                    key={clip.id}
+                    className={cn(
+                      "absolute h-10 my-1 rounded overflow-hidden cursor-pointer hover:opacity-100 transition-opacity",
+                      selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0"
+                    )}
+                    style={{
+                      left: `${(clip.start / duration) * 100}%`,
+                      width: `${((clip.end - clip.start) / duration) * 100}%`,
+                      ...getThumbnailStyle(clip)
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('[Timeline] Clip clicked:', clip.id, clip.type);
+                      onClipSelect?.(clip.id);
+                    }}
+                    title={clip.name || clip.text || clip.asset || "Edit"}
+                  >
+                    <div className={`h-full w-full bg-gradient-to-r ${getClipStyle(clip.type)} flex items-center justify-center px-2 bg-opacity-70`}>
+                      <span className="text-xs text-white truncate font-medium">
+                        {clip.name || clip.text || clip.asset || formatTime(clip.end - clip.start)}
+                      </span>
                     </div>
-                  ))}
-                  {/* Render text overlays only on the Text track (index 1) */}
-                  {index === 1 && clips.filter(clip => clip.type === "text").map((clip) => (
-                    <div
-                      key={clip.id}
-                      className={cn(
-                        "absolute bg-yellow-400/80 rounded h-6 flex items-center justify-center border border-yellow-600 cursor-pointer",
-                        selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0"
-                      )}
-                      style={{
-                        left: `${(clip.start / duration) * 100}%`,
-                        width: `${((clip.end - clip.start) / duration) * 100}%`,
-                        top: 6, // visually offset within the track
-                        zIndex: 3,
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('[Timeline] Text overlay clicked:', clip.id, clip.type);
-                        onClipSelect?.(clip.id);
-                      }}
-                      title={clip.text || clip.name}
+                    {/* Left trim handle */}
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 w-3 hover:bg-white hover:bg-opacity-30 cursor-w-resize z-10"
+                      onMouseDown={(e) => handleTrimHandleMouseDown(e, clip.id, 'start')}
+                      title="Trim start"
                     >
-                      <span className="text-xs font-bold text-yellow-900 px-2">{clip.text || clip.name}</span>
+                      <div className="h-full w-1 bg-white opacity-60 mx-auto"></div>
                     </div>
-                  ))}
-                  {/* Render overlays only on the Effects track (index 3) */}
-                  {index === 3 && clips.filter(clip => clip.type === "overlay").map((clip) => (
-                    <div
-                      key={clip.id}
-                      className={cn(
-                        "absolute bg-green-400/80 rounded h-6 flex items-center justify-center border border-green-600 cursor-pointer",
-                        selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0"
-                      )}
-                      style={{
-                        left: `${(clip.start / duration) * 100}%`,
-                        width: `${((clip.end - clip.start) / duration) * 100}%`,
-                        top: 6, // visually offset within the track
-                        zIndex: 3,
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('[Timeline] Overlay clicked:', clip.id, clip.type);
-                        onClipSelect?.(clip.id);
-                      }}
-                      title={clip.asset || clip.name}
+                    {/* Right trim handle */}
+                    <div 
+                      className="absolute right-0 top-0 bottom-0 w-3 hover:bg-white hover:bg-opacity-30 cursor-e-resize z-10"
+                      onMouseDown={(e) => handleTrimHandleMouseDown(e, clip.id, 'end')}
+                      title="Trim end"
                     >
-                      <span className="text-xs font-bold text-green-900 px-2">{clip.asset || clip.name}</span>
+                      <div className="h-full w-1 bg-white opacity-60 mx-auto"></div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>

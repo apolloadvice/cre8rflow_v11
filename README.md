@@ -40,6 +40,17 @@ Or for text overlay:
 ```
 Multiple actions can be represented as an array of such objects.
 
+### Robust Cut Command Handling (2024-06-15)
+- The system now robustly distinguishes between:
+  - **Trim:** "cut out the first/last N seconds" (removes from start/end, no gap)
+  - **Gap:** "cut from X to Y seconds" (removes a middle segment, leaves a gap in the timeline)
+- The backend and LLM prompt/schema have been updated to support both cases, and the timeline is updated accordingly.
+- See tests for both scenarios in `/backend/tests/test_command_executor.py`.
+
+### Asset Duration Handling
+- The backend always fetches the latest version of the asset from Supabase to determine duration.
+- Fallback to 60s only occurs if no asset is found; otherwise, the correct duration is used for all commands.
+
 ## User Instructions (New)
 - **Type any natural language command describing your edit.**
   - Examples:
@@ -271,28 +282,25 @@ The backend exposes API endpoints for real-time timeline preview and export, rea
     "timeline": { /* Timeline as dict/JSON (see Timeline.to_dict()) */ }
   }
   ```
-- **Response:** `video/mp4` file (preview)
-- **Errors:**
-  - `400`: Invalid timeline or unsupported file type
-  - `500`: ffmpeg or rendering error
+- **Response:** `
 
-### POST /api/export
-- **Description:** Export the given timeline to a high-quality video file using ffmpeg. Returns a video file for download or further processing.
-- **Payload:**
-  ```json
-  {
-    "timeline": { /* Timeline as dict/JSON (see Timeline.to_dict()) */ }
-  }
-  ```
-  - Optional query param: `quality` (`high`, `medium`, `low`)
-- **Response:** `video/mp4` file (export)
-- **Errors:**
-  - `400`: Invalid timeline or unsupported file type
-  - `500`: ffmpeg or export error
+### Timeline Placement & Overlap Prevention (2024-12-19)
 
-**Both endpoints:**
-- Accept the full timeline state as input (including all tracks, clips, effects, transitions).
-- Return clear status/errors for UI feedback.
-- Schedule temporary files for deletion after response (safe for repeated use).
+The timeline now includes robust clip placement functionality that prevents overlapping clips on the same track:
 
-These endpoints are ready for real-time UI integration and can be triggered programmatically.
+- **Smart Positioning**: When dragging assets from the asset panel to the timeline, the system automatically finds the best available position
+- **Overlap Prevention**: Clips cannot overlap on the same track - if a drop position conflicts with existing clips, the system finds the next available spot
+- **Gap Detection**: The system intelligently fills gaps between clips when possible, rather than always placing at the end
+- **Visual Feedback**: Drag operations show visual feedback including drop zone highlighting and position indicators
+- **Multi-Track Support**: Clips on different tracks can occupy the same timeline position without conflict
+- **User Notification**: Users are informed when clips are repositioned to avoid overlaps
+
+#### Example Scenarios:
+- Drop at empty position → Clip placed at exact drop location
+- Drop overlapping existing clip → Clip placed after the overlapping clip
+- Drop with gap available → Clip placed in the gap if it fits
+- Drop on different track → No conflict, exact positioning maintained
+
+This functionality ensures a smooth editing experience where users can quickly add clips without manually avoiding overlaps.
+
+## User Instructions (New)

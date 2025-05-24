@@ -4,7 +4,8 @@
 - UI components for asset upload, timeline, and command input are present but not fully connected.
 - Asset upload lacks persistent storage and metadata extraction (duration, resolution, etc.).
 - Timeline drag-and-drop is incomplete; timeline does not visually represent clip duration or allow proper placement.
-- **Command parsing is being upgraded to an AI-powered system (OpenAI GPT-4 or similar) for robust, flexible natural language understanding.**
+- **Command parsing is now AI-powered (OpenAI GPT-4 or similar) and robust for all major edit types, including nuanced 'cut' commands (trim/gap).**
+- Asset duration is always fetched from the latest version in Supabase, avoiding fallback to 60s unless no asset exists.
 - No visible processing feedback or step-by-step user guidance.
 - Edits are not actually applied to timeline data or video; no real video processing or timeline update.
 - Timeline and video playback do not update after edits; no real-time preview of changes.
@@ -20,7 +21,7 @@
 ## Roadmap & Next Steps (2024-06-14)
 - Implement persistent asset management and metadata extraction
 - Complete drag-and-drop and timeline clip creation with correct scaling
-- Integrate robust NLP parser and map commands to timeline actions
+- Integrate robust NLP parser and map commands to timeline actions (now robust for 'cut' commands)
 - Add user feedback mechanisms (processing, confirmation, error)
 - Implement timeline data updates and video processing backend
 - Enable real-time timeline and video updates after edits
@@ -177,10 +178,11 @@ The NLP Video Editor is a specialized tool that enables users to edit video clip
 ## Challenges and Considerations
 
 ### Technical Challenges
-- Accurate parsing of ambiguous commands
+- Accurate parsing of ambiguous commands (now robust for 'cut' trim/gap distinction)
 - Performance optimization for video processing
 - Managing complex timeline operations
 - Cross-platform compatibility
+- Asset versioning/duplication is now handled by always using the latest version for duration
 
 ### UX Challenges
 - Training users to phrase commands effectively

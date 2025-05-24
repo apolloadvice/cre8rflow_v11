@@ -155,8 +155,9 @@ export async function sendCommand(asset_path: string, command: string) {
   }
   const payload = { asset_path, command };
   console.log("DEBUG sendCommand payload", payload);
-  const res = await axios.post('/api/command', payload);
-  return res.data;
+  console.log("DEBUG sendCommand URL:", API_BASE_URL + '/command');
+  const res = await axios.post(API_BASE_URL + '/command', payload);
+  return res;
 }
 
 export const uploadVideo = async (file: File): Promise<string> => {

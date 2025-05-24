@@ -3,7 +3,7 @@ import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "@/componen
 import VideoPlayer from "@/components/editor/VideoPlayer";
 import Timeline from "@/components/editor/Timeline";
 import ChatPanel from "@/components/editor/ChatPanel";
-import AssetsIconBar from "@/components/editor/AssetsIconBar";
+import AssetPanel from "@/components/editor/AssetPanel";
 import TimecodeDisplay from "@/components/editor/TimecodeDisplay";
 import { useEditorStore, useLayoutSetter, useLayout } from "@/store/editorStore";
 import { useVideoHandler } from "@/hooks/useVideoHandler";
@@ -11,6 +11,7 @@ import { useAICommands } from "@/hooks/useAICommands";
 import { saveTimeline } from "@/api/apiClient";
 import { useToast } from "@/hooks/use-toast";
 import { debounce } from "lodash";
+import { supabase } from "@/integrations/supabase/client";
 
 const EditorContent = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -32,6 +33,8 @@ const EditorContent = () => {
     setClips,
     selectedClipId,
     setSelectedClipId,
+    setActiveVideoAsset,
+    setVideoSrc,
   } = useEditorStore();
   
   // Use our custom hooks
@@ -123,6 +126,41 @@ const EditorContent = () => {
     setLayoutSize('timeline', sizes[1]);
   };
 
+  // Handler for video selection from AssetPanel
+  const handleVideoSelect = async (video: any) => {
+    setActiveVideoAsset(video);
+    
+    // If video has a src URL, use it directly
+    if (video.src) {
+      setVideoSrc(video.src);
+    } else if (video.file_path) {
+      // Create Supabase Storage signed URL for the video
+      try {
+        const { data: urlData, error } = await supabase.storage
+          .from('assets')
+          .createSignedUrl(video.file_path, 3600); // 1 hour expiry
+        
+        if (error) {
+          console.error('Failed to create signed URL:', error);
+          toast({
+            title: "Video Load Error",
+            description: "Failed to load video. Please try again.",
+            variant: "destructive"
+          });
+        } else if (urlData?.signedUrl) {
+          setVideoSrc(urlData.signedUrl);
+        }
+      } catch (e) {
+        console.error('Error creating signed URL:', e);
+        toast({
+          title: "Video Load Error", 
+          description: "Failed to load video. Please try again.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
   return (
     <div className="flex-1 overflow-hidden">
       <ResizablePanelGroup
@@ -135,7 +173,9 @@ const EditorContent = () => {
           minSize={15}
           className="flex"
         >
-          <AssetsIconBar />
+          <AssetPanel 
+            onVideoSelect={handleVideoSelect}
+          />
         </ResizablePanel>
         
         {/* Divider between sidebar and main content */}

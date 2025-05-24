@@ -111,6 +111,13 @@ export const useEditorStore = create<EditorStore>()(
       
       // Actions
       setClips: (clips) => {
+        console.log("🎬 [Store] setClips called with:", clips);
+        console.log("🎬 [Store] setClips count:", clips.length);
+        console.log("🎬 [Store] Previous clips:", get().clips);
+        
+        // Log stack trace to see where this is being called from
+        console.trace("🎬 [Store] setClips call stack");
+        
         set({ clips });
         get().recalculateDuration();
         get().pushToHistory();
