@@ -536,3 +536,66 @@ def test_command_history_load_from_file(tmp_path):
     after_clips2 = entry1.after_snapshot.get_track("video").clips
     assert len(after_clips2) == 1
     assert after_clips2[0].name == "clip1_part1_joined_clip1_part2"
+
+def test_cut_trim_start():
+    parser = CommandParser()
+    timeline = Timeline(frame_rate=FRAME_RATE)
+    executor = CommandExecutor(timeline)
+    clip = VideoClip(name="clip_trim_start", start_frame=0, end_frame=to_frames(30))
+    timeline.add_clip(clip, track_index=0)
+    op = parser.parse_command("Cut out the first 10 seconds of clip_trim_start", timeline.frame_rate)
+    result = executor.execute(op)
+    assert result.success
+    video_clips = timeline.get_track("video").clips
+    assert len(video_clips) == 1
+    assert video_clips[0].start == to_frames(10)
+    assert video_clips[0].end == to_frames(30)
+
+
+def test_cut_trim_end():
+    parser = CommandParser()
+    timeline = Timeline(frame_rate=FRAME_RATE)
+    executor = CommandExecutor(timeline)
+    clip = VideoClip(name="clip_trim_end", start_frame=0, end_frame=to_frames(30))
+    timeline.add_clip(clip, track_index=0)
+    op = parser.parse_command("Cut out the last 10 seconds of clip_trim_end", timeline.frame_rate)
+    result = executor.execute(op)
+    assert result.success
+    video_clips = timeline.get_track("video").clips
+    assert len(video_clips) == 1
+    assert video_clips[0].start == 0
+    assert video_clips[0].end == to_frames(20)
+
+
+def test_cut_middle_gap():
+    parser = CommandParser()
+    timeline = Timeline(frame_rate=FRAME_RATE)
+    executor = CommandExecutor(timeline)
+    clip = VideoClip(name="clip_gap", start_frame=0, end_frame=to_frames(30))
+    timeline.add_clip(clip, track_index=0)
+    op = parser.parse_command("Cut from 10 to 20 seconds of clip_gap", timeline.frame_rate)
+    result = executor.execute(op)
+    assert result.success
+    video_clips = timeline.get_track("video").clips
+    assert len(video_clips) == 2
+    # First part
+    assert video_clips[0].name.startswith("clip_gap_part1")
+    assert video_clips[0].start == 0
+    assert video_clips[0].end == to_frames(10)
+    # Second part
+    assert video_clips[1].name.startswith("clip_gap_part2")
+    assert video_clips[1].start == to_frames(20)
+    assert video_clips[1].end == to_frames(30)
+
+
+def test_cut_invalid_range():
+    parser = CommandParser()
+    timeline = Timeline(frame_rate=FRAME_RATE)
+    executor = CommandExecutor(timeline)
+    clip = VideoClip(name="clip_invalid", start_frame=0, end_frame=to_frames(30))
+    timeline.add_clip(clip, track_index=0)
+    # Try to cut a segment outside the clip's range
+    op = parser.parse_command("Cut from 40 to 50 seconds of clip_invalid", timeline.frame_rate)
+    result = executor.execute(op)
+    assert not result.success
+    assert "Invalid cut/trim range" in result.message

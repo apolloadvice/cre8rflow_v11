@@ -39,13 +39,14 @@ def load_timeline_from_db(asset_path: str):
 def get_asset_duration(asset_path: str) -> float:
     """
     Fetch the duration (in seconds) for the asset from the assets table in Supabase.
-    Returns None if not found or not available.
+    Returns None if not found or not available. Uses the latest version if multiple exist.
     """
     supabase = get_supabase_client()
     try:
-        result = supabase.table("assets").select("duration").eq("path", asset_path).single().execute()
-        if result.data and result.data.get("duration"):
-            return float(result.data["duration"])
+        # Fetch all rows for the asset path, order by updated_at descending, and use the latest
+        result = supabase.table("assets").select("duration,updated_at").eq("path", asset_path).order("updated_at", desc=True).limit(1).execute()
+        if result.data and len(result.data) > 0 and result.data[0].get("duration"):
+            return float(result.data[0]["duration"])
     except Exception as e:
         logging.warning(f"[get_asset_duration] Could not fetch duration for {asset_path}: {e}")
     return None
