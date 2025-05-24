@@ -80,62 +80,49 @@ const findBestTrack = (clips: any[], clipType: string, startTime: number, clipDu
     return start1 < end2 && end1 > start2;
   };
   
-  // Rule 1: Check for time overlap with any existing element
-  const hasOverlap = nonVideoClips.some(clip => 
-    overlaps(startTime, endTime, clip.start, clip.end)
-  );
-  
-  if (hasOverlap) {
-    // Rule 1: If overlap exists, create new track below all existing tracks
-    const maxTrack = Math.max(...nonVideoClips.map(clip => clip.track));
-    const newTrack = maxTrack + 1;
-    console.log("🎬 [Track Assignment] Time overlap detected -> New track", newTrack);
-    return { track: newTrack, startTime };
-  }
-  
-  // Rule 2: Check if this is a different element type
+  // Rule 1: Check if this is the same element type as existing elements
   const existingTypes = [...new Set(nonVideoClips.map(clip => clip.type))];
   console.log("🎬 [Track Assignment] Existing types:", existingTypes);
   
-  if (!existingTypes.includes(clipType)) {
+  if (existingTypes.includes(clipType)) {
+    // Rule 1a: Same type exists -> try to use existing track of same type
+    const sameTypeClips = nonVideoClips.filter(clip => clip.type === clipType);
+    console.log("🎬 [Track Assignment] Same type clips:", sameTypeClips);
+    
+    // Group same type clips by track
+    const trackGroups: { [track: number]: any[] } = {};
+    sameTypeClips.forEach(clip => {
+      if (!trackGroups[clip.track]) {
+        trackGroups[clip.track] = [];
+      }
+      trackGroups[clip.track].push(clip);
+    });
+    
+    // Check each track of the same type for available space
+    for (const track of Object.keys(trackGroups).map(Number).sort()) {
+      const trackClips = trackGroups[track];
+      const hasTrackOverlap = trackClips.some(clip => 
+        overlaps(startTime, endTime, clip.start, clip.end)
+      );
+      
+      if (!hasTrackOverlap) {
+        console.log("🎬 [Track Assignment] Same type, no overlap -> Existing track", track);
+        return { track, startTime };
+      }
+    }
+    
+    // Rule 1b: Same type but all existing tracks have overlap -> create new track
+    const maxTrack = Math.max(...nonVideoClips.map(clip => clip.track));
+    const newTrack = maxTrack + 1;
+    console.log("🎬 [Track Assignment] Same type but all tracks have overlap -> New track", newTrack);
+    return { track: newTrack, startTime };
+  } else {
     // Rule 2: Different element type -> new track below most recent track
     const maxTrack = Math.max(...nonVideoClips.map(clip => clip.track));
     const newTrack = maxTrack + 1;
     console.log("🎬 [Track Assignment] Different element type -> New track", newTrack);
     return { track: newTrack, startTime };
   }
-  
-  // Rule 3: Same type, no overlap -> try to use existing track of same type
-  const sameTypeClips = nonVideoClips.filter(clip => clip.type === clipType);
-  console.log("🎬 [Track Assignment] Same type clips:", sameTypeClips);
-  
-  // Group same type clips by track
-  const trackGroups: { [track: number]: any[] } = {};
-  sameTypeClips.forEach(clip => {
-    if (!trackGroups[clip.track]) {
-      trackGroups[clip.track] = [];
-    }
-    trackGroups[clip.track].push(clip);
-  });
-  
-  // Check each track of the same type for available space
-  for (const track of Object.keys(trackGroups).map(Number).sort()) {
-    const trackClips = trackGroups[track];
-    const hasTrackOverlap = trackClips.some(clip => 
-      overlaps(startTime, endTime, clip.start, clip.end)
-    );
-    
-    if (!hasTrackOverlap) {
-      console.log("🎬 [Track Assignment] Same type, no overlap -> Existing track", track);
-      return { track, startTime };
-    }
-  }
-  
-  // If no existing track of same type works, create new track
-  const maxTrack = Math.max(...nonVideoClips.map(clip => clip.track));
-  const newTrack = maxTrack + 1;
-  console.log("🎬 [Track Assignment] Same type but all tracks have overlap -> New track", newTrack);
-  return { track: newTrack, startTime };
 };
 
 // Utility function to convert backend timeline format to frontend clips
