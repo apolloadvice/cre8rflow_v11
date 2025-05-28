@@ -1,4 +1,3 @@
-
 import { useNavigate, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -34,10 +33,15 @@ const NavBar = () => {
             className="flex items-center gap-2 cursor-pointer" 
             onClick={() => navigate("/")}
           >
-            <div className="bg-cre8r-violet rounded-full p-1.5">
-              <Video className="h-5 w-5 text-white" />
+            <div className="rounded-full p-1.5 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-cre8r-violet-dark to-cre8r-gray-800 rounded-full"></div>
+              <div className="relative bg-gradient-to-tr from-cre8r-violet-dark to-cre8r-violet-light rounded-full p-1.5">
+                <Video className="w-5 h-5 text-white relative z-10" />
+              </div>
             </div>
-            <span className="font-bold text-lg">Cre8rFlow</span>
+            <span className="text-lg font-semibold text-white">
+              Cre8rFlow
+            </span>
           </div>
 
           <nav className="hidden md:flex gap-1 ml-6">

@@ -10,6 +10,7 @@ export interface Clip {
   type: string;
   name: string;
   file_path?: string; // Backend-accessible video file path
+  thumbnail?: string; // Video thumbnail for timeline display
 }
 
 export interface Asset {
@@ -42,6 +43,8 @@ interface EditorState {
     past: Omit<EditorState, 'history'>[];
     future: Omit<EditorState, 'history'>[];
   };
+  
+  projectName: string;
 }
 
 interface EditorStore extends EditorState {
@@ -49,6 +52,7 @@ interface EditorStore extends EditorState {
   setClips: (clips: Clip[]) => void;
   addClip: (clip: Clip) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
+  moveClip: (id: string, newTrack: number, newStart: number, newEnd: number) => void;
   deleteClip: (id: string) => void;
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
@@ -70,6 +74,8 @@ interface EditorStore extends EditorState {
   addAsset: (asset: Asset) => void;
   removeAsset: (id: string) => void;
   getAssetById: (id: string) => Asset | undefined;
+  
+  setProjectName: (name: string) => void;
 }
 
 // Define StateWithoutHistory type that can be used for history entries
@@ -109,6 +115,8 @@ export const useEditorStore = create<EditorStore>()(
         future: [],
       },
       
+      projectName: "Untitled Project",
+      
       // Actions
       setClips: (clips) => {
         console.log("🎬 [Store] setClips called with:", clips);
@@ -133,6 +141,17 @@ export const useEditorStore = create<EditorStore>()(
         set((state) => ({
           clips: state.clips.map((clip) => 
             clip.id === id ? { ...clip, ...updates } : clip
+          ),
+        }));
+        get().recalculateDuration();
+        get().pushToHistory();
+      },
+      
+      moveClip: (id, newTrack, newStart, newEnd) => {
+        console.log('[Store] moveClip called with:', id, newTrack, newStart, newEnd);
+        set((state) => ({
+          clips: state.clips.map((clip) => 
+            clip.id === id ? { ...clip, track: newTrack, start: newStart, end: newEnd } : clip
           ),
         }));
         get().recalculateDuration();
@@ -247,6 +266,8 @@ export const useEditorStore = create<EditorStore>()(
       addAsset: (asset) => set((state) => ({ assets: [...state.assets, asset] })),
       removeAsset: (id) => set((state) => ({ assets: state.assets.filter(a => a.id !== id) })),
       getAssetById: (id) => get().assets.find(a => a.id === id),
+      
+      setProjectName: (name) => set({ projectName: name }),
     }),
     {
       name: 'cre8r-editor-storage',
