@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -65,9 +64,11 @@ export default {
 				},
 				cre8r: {
 					dark: '#171717',
-					violet: '#9B5CFF',
-					'violet-light': '#B47EFF',
-					'violet-dark': '#7A37DD',
+					violet: '#7F7FD5',
+					'violet-light': '#9B8FE8',
+					'violet-dark': '#6B5FC7',
+					'violet-gradient-start': '#7F7FD5',
+					'violet-gradient-end': '#9B8FE8',
 					'gray-800': '#1E1E1E',
 					'gray-700': '#2D2D2D',
 					'gray-600': '#3D3D3D',
@@ -77,6 +78,17 @@ export default {
 					'gray-200': '#C8C8C8',
 					'gray-100': '#E5E5E5',
 				}
+			},
+			backgroundImage: {
+				'gradient-violet': 'linear-gradient(135deg, #7F7FD5 0%, #9B8FE8 100%)',
+				'gradient-violet-hover': 'linear-gradient(135deg, #8A8ADA 0%, #A69BEB 100%)',
+				'editor-panel': 'linear-gradient(145deg, rgba(127, 127, 213, 0.4) 0%, rgba(63, 63, 173, 0.3) 25%, rgba(34, 34, 34, 0.95) 50%, rgba(127, 127, 213, 0.2) 100%)',
+				'timeline-marker': 'linear-gradient(to bottom, #7F7FD5 0%, #8F8FDF 50%, #7F7FD5 100%)',
+				'quick-action-btn': 'linear-gradient(135deg, rgba(45, 45, 45, 0.9) 0%, rgba(111, 111, 203, 0.3) 50%, rgba(63, 63, 173, 0.4) 100%)',
+				'nav-item': 'linear-gradient(90deg, transparent 0%, rgba(127, 127, 213, 0.05) 50%, rgba(143, 143, 223, 0.1) 100%)',
+				'nav-item-active': 'linear-gradient(90deg, rgba(127, 127, 213, 0.2) 0%, rgba(143, 143, 223, 0.4) 50%, rgba(159, 159, 233, 0.3) 100%)',
+				'sidebar-bg': 'linear-gradient(to bottom, #1E1E1E 0%, rgba(127, 127, 213, 0.1) 50%, rgba(63, 63, 173, 0.2) 100%)',
+				'sidebar-active': 'linear-gradient(to bottom right, #6B5FC7 0%, #7F7FD5 50%, #9B8FE8 100%)',
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
