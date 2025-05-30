@@ -37,17 +37,7 @@
 
   /* Main Background Gradient */
   body {
-    background: linear-gradient(135deg, 
-      #3F3FAD 0%,     /* ultra-dark purple */
-      #4F4FB7 8%,     /* darkest purple */
-      #5F5FC1 16%,    /* darker purple */
-      #6F6FCB 28%,    /* dark purple */
-      #7F7FD5 42%,    /* main accent purple */
-      #8F8FDF 58%,    /* light purple */
-      #9F9FE9 74%,    /* lighter purple */
-      #AFAFF3 88%,    /* lightest purple */
-      #BFBFFD 100%    /* ultra-light purple */
-    );
+    background: #171717; /* Solid dark background instead of gradient */
     background-attachment: fixed;
   }
 

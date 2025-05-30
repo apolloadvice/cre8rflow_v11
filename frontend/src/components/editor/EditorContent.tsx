@@ -38,7 +38,7 @@ const EditorContent = () => {
   } = useEditorStore();
   
   // Use our custom hooks
-  const { handleVideoDrop, handleVideoAssetDrop: origHandleVideoAssetDrop, handleVideoProcessed } = useVideoHandler();
+  const { handleVideoDrop, handleVideoAssetDrop: origHandleVideoAssetDrop, handleMultipleVideoAssetDrop: origHandleMultipleVideoAssetDrop, handleVideoProcessed } = useVideoHandler();
   const { handleChatCommand } = useAICommands();
   const { toast } = useToast();
 
@@ -112,6 +112,18 @@ const EditorContent = () => {
     }, 0);
   };
 
+  // Patch handleMultipleVideoAssetDrop to save timeline after drop
+  const handleMultipleVideoAssetDrop = (videoAssets: any[], track: number, dropTime: number) => {
+    origHandleMultipleVideoAssetDrop(videoAssets, track, dropTime);
+    // Save after drop (new clips added)
+    setTimeout(() => {
+      if (activeVideoAsset?.file_path) {
+        const timelineObj = buildTimelineObject(useEditorStore.getState().clips);
+        debouncedSaveTimeline(activeVideoAsset.file_path, timelineObj);
+      }
+    }, 0);
+  };
+
   // Handlers for layout changes
   const handleSidebarResize = (sizes: number[]) => {
     setLayoutSize('sidebar', sizes[0]);
@@ -162,7 +174,7 @@ const EditorContent = () => {
   };
 
   return (
-    <div className="flex-1 overflow-hidden">
+    <div className="flex-1 overflow-hidden bg-cre8r-dark">
       <ResizablePanelGroup
         direction="horizontal" 
         onLayout={handleSidebarResize}
@@ -246,6 +258,7 @@ const EditorContent = () => {
                 selectedClipId={selectedClipId}
                 onVideoDrop={handleVideoDrop}
                 onVideoAssetDrop={handleVideoAssetDrop}
+                onMultipleVideoAssetDrop={handleMultipleVideoAssetDrop}
                 onClipUpdate={handleClipUpdate}
               />
             </ResizablePanel>

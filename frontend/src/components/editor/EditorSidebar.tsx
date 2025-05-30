@@ -27,9 +27,9 @@ const EditorSidebar = () => {
   const [selectedItem, setSelectedItem] = useState('video');
 
   return (
-    <div className="w-20 bg-sidebar-bg border-r border-cre8r-gray-700 flex flex-col items-center py-4 space-y-4 relative">
-      {/* Background layer */}
-      <div className="absolute inset-0 bg-gradient-to-b from-cre8r-gray-800 via-cre8r-violet/10 to-cre8r-violet-dark/20"></div>
+    <div className="w-20 bg-cre8r-gray-800 border-r border-cre8r-gray-700 flex flex-col items-center py-4 space-y-4 relative overflow-hidden">
+      {/* Background layer with gradient - properly contained */}
+      <div className="absolute inset-0 bg-gradient-to-b from-cre8r-gray-800 via-cre8r-violet/10 to-cre8r-violet-dark/20 pointer-events-none"></div>
       
       <div className="relative z-10 flex flex-col items-center space-y-4">
         {sidebarItems.map((item) => {
