@@ -96,6 +96,129 @@ const findBestTrack = (clips: Clip[], clipType: string, startTime: number, clipD
   return { track: newTrack, startTime };
 };
 
+// Function to generate thumbnail from video URL
+const generateVideoThumbnail = (videoUrl: string): Promise<string> => {
+  console.log("🖼️ [Thumbnail] Starting thumbnail generation for URL:", videoUrl.substring(0, 100) + "...");
+  
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.muted = true; // Required for autoplay in some browsers
+    video.preload = 'metadata';
+    video.playsInline = true; // Helps with mobile devices
+    
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      video.removeEventListener('loadedmetadata', onLoadedMetadata);
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onError);
+      video.removeEventListener('abort', onAbort);
+      video.removeEventListener('canplay', onCanPlay);
+      if (video.src) {
+        video.src = '';
+        video.load(); // Clear the video element completely
+      }
+    };
+    
+    const onLoadedMetadata = () => {
+      console.log("🖼️ [Thumbnail] Video metadata loaded, duration:", video.duration, "dimensions:", video.videoWidth, "x", video.videoHeight);
+      // Set the time to capture thumbnail (use 1st second as requested)
+      if (video.duration > 1) {
+        video.currentTime = 1.0;
+      } else {
+        // For very short videos, use middle point
+        video.currentTime = video.duration / 2;
+      }
+    };
+    
+    const onCanPlay = () => {
+      console.log("🖼️ [Thumbnail] Video can play, ready state:", video.readyState);
+    };
+    
+    const onSeeked = () => {
+      console.log("🖼️ [Thumbnail] Video seeked to:", video.currentTime);
+      try {
+        const canvas = document.createElement('canvas');
+        
+        // Ensure we have valid dimensions
+        const width = video.videoWidth || 320;
+        const height = video.videoHeight || 240;
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        console.log("🖼️ [Thumbnail] Canvas created:", canvas.width, "x", canvas.height);
+        
+        if (ctx && width > 0 && height > 0) {
+          // Clear canvas with black background first
+          ctx.fillStyle = 'black';
+          ctx.fillRect(0, 0, width, height);
+          
+          // Draw the video frame
+          ctx.drawImage(video, 0, 0, width, height);
+          
+          // Convert to data URL with higher quality
+          const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          console.log("🖼️ [Thumbnail] ✅ Generated thumbnail, data URL length:", thumbnailDataUrl.length);
+          console.log("🖼️ [Thumbnail] Thumbnail data URL starts with:", thumbnailDataUrl.substring(0, 100));
+          
+          cleanup();
+          resolve(thumbnailDataUrl);
+        } else {
+          console.error("🖼️ [Thumbnail] ❌ Failed to get valid video dimensions or canvas context");
+          console.error("🖼️ [Thumbnail] Context:", !!ctx, "Width:", width, "Height:", height);
+          cleanup();
+          reject(new Error('Failed to get valid video dimensions or canvas context'));
+        }
+      } catch (e) {
+        console.error("🖼️ [Thumbnail] ❌ Error during canvas processing:", e);
+        cleanup();
+        reject(e);
+      }
+    };
+    
+    const onError = (e: any) => {
+      console.error('🖼️ [Thumbnail] ❌ Video error event:', e);
+      console.error('🖼️ [Thumbnail] Video error details:', {
+        error: video.error,
+        networkState: video.networkState,
+        readyState: video.readyState,
+        src: video.src
+      });
+      cleanup();
+      reject(new Error('Failed to load video for thumbnail generation'));
+    };
+    
+    const onAbort = () => {
+      console.error('🖼️ [Thumbnail] ❌ Video loading was aborted');
+      cleanup();
+      reject(new Error('Video loading was aborted'));
+    };
+    
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
+    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('error', onError);
+    video.addEventListener('abort', onAbort);
+    video.addEventListener('canplay', onCanPlay);
+    
+    // Set timeout to prevent hanging
+    timeoutId = setTimeout(() => {
+      console.error('🖼️ [Thumbnail] ❌ Timeout: Video took too long to load');
+      cleanup();
+      reject(new Error('Timeout: Video took too long to load'));
+    }, 20000); // 20 second timeout
+    
+    console.log("🖼️ [Thumbnail] Setting video source...");
+    video.src = videoUrl;
+  });
+};
+
 export const useVideoHandler = () => {
   const { toast } = useToast();
   const {
@@ -136,6 +259,14 @@ export const useVideoHandler = () => {
     video.onloadedmetadata = async () => {
       const clipDuration = video.duration;
       
+      // Generate thumbnail for the video
+      let thumbnail = "";
+      try {
+        thumbnail = await generateVideoThumbnail(videoUrl);
+      } catch (e) {
+        console.warn("Failed to generate thumbnail for dropped video:", e);
+      }
+      
       // Find the best track and position for this video clip
       const { track: bestTrack, startTime: adjustedStartTime } = findBestTrack(clips, 'video', dropTime, clipDuration);
       
@@ -145,7 +276,8 @@ export const useVideoHandler = () => {
         end: adjustedStartTime + clipDuration,
         track: bestTrack,
         type: "video",
-        name: file.name
+        name: file.name,
+        thumbnail: thumbnail // Include generated thumbnail
       };
       
       setClips([...clips, newClip]);
@@ -178,6 +310,8 @@ export const useVideoHandler = () => {
   };
 
   const handleVideoAssetDrop = async (videoAsset: any, track: number, dropTime: number) => {
+    console.log("🎬 [Video Handler] Starting handleVideoAssetDrop for:", videoAsset.name);
+    
     // Always look up the asset in the asset store by id
     const asset = getAssetById ? getAssetById(videoAsset.id) : videoAsset;
     if (!asset || !asset.file_path) {
@@ -189,10 +323,46 @@ export const useVideoHandler = () => {
       return;
     }
 
+    console.log("🎬 [Video Handler] Asset found:", asset.name, "file_path:", asset.file_path);
+
+    // Generate thumbnail from Supabase video URL FIRST
+    let thumbnail = "";
+    let videoUrl = "";
+    
+    try {
+      console.log("🎬 [Video Handler] Creating signed URL for thumbnail generation...");
+      // Create signed URL for thumbnail generation
+      const { data: urlData, error } = await supabase.storage
+        .from('assets')
+        .createSignedUrl(asset.file_path, 3600); // 1 hour expiry
+      
+      if (error) {
+        console.error('Failed to create signed URL for thumbnail:', error);
+      } else if (urlData?.signedUrl) {
+        videoUrl = urlData.signedUrl;
+        console.log("🎬 [Video Handler] Signed URL created, generating thumbnail for:", asset.name);
+        console.log("🎬 [Video Handler] Video URL:", videoUrl.substring(0, 100) + "...");
+        
+        // Wait for thumbnail generation to complete
+        thumbnail = await generateVideoThumbnail(videoUrl);
+        console.log("🎬 [Video Handler] ✅ Successfully generated thumbnail for:", asset.name);
+        console.log("🎬 [Video Handler] Thumbnail data length:", thumbnail.length);
+      }
+    } catch (e) {
+      console.error("🎬 [Video Handler] ❌ Failed to generate thumbnail for asset:", asset.name, e);
+    }
+
     // Find the best track and position for this video clip
     const { track: bestTrack, startTime: adjustedStartTime } = findBestTrack(clips, 'video', dropTime, asset.duration);
 
-    // Create a backend-ready timeline clip
+    console.log("🎬 [Video Handler] Creating clip with thumbnail:", {
+      name: asset.name,
+      track: bestTrack,
+      hasThumbnail: !!thumbnail,
+      thumbnailLength: thumbnail.length
+    });
+
+    // Create a backend-ready timeline clip with the generated thumbnail
     const newClip: Clip = {
       id: `clip-${Date.now()}`,
       name: asset.name,
@@ -201,16 +371,23 @@ export const useVideoHandler = () => {
       track: bestTrack,
       type: "video",
       file_path: asset.file_path,
+      thumbnail: thumbnail, // Use generated thumbnail from Supabase video
       effects: [],
       _type: "VideoClip"
     } as any;
+    
+    console.log("🎬 [Video Handler] Adding clip to timeline:", newClip);
     setClips([...clips, newClip]);
     setSelectedClipId(newClip.id);
     
     // Set the video source for the player if we don't have one yet or if this is the first clip
     if (!videoSrc || clips.length === 0) {
-      // Use existing videoAsset.src if available, otherwise create signed URL
-      if (videoAsset.src) {
+      // Use the generated video URL or try to create a new one
+      if (videoUrl) {
+        setVideoSrc(videoUrl);
+        setDuration(asset.duration);
+        setActiveVideoAsset(asset);
+      } else if (videoAsset.src) {
         setVideoSrc(videoAsset.src);
         setDuration(asset.duration);
         setActiveVideoAsset(asset);
@@ -251,6 +428,108 @@ export const useVideoHandler = () => {
       title: "Video added to timeline",
       description: message,
     });
+  };
+
+  const handleMultipleVideoAssetDrop = async (videoAssets: any[], track: number, dropTime: number) => {
+    console.log("🎬 [Video Handler] Multiple assets dropped:", videoAssets.map(a => a.name));
+    
+    let currentDropTime = dropTime;
+    const newClips: Clip[] = [];
+    
+    for (const videoAsset of videoAssets) {
+      console.log("🎬 [Video Handler] Processing asset:", videoAsset.name);
+      
+      // Always look up the asset in the asset store by id
+      const asset = getAssetById ? getAssetById(videoAsset.id) : videoAsset;
+      if (!asset || !asset.file_path) {
+        console.warn(`Skipping asset ${videoAsset.name}: file path not found`);
+        continue;
+      }
+
+      // Generate thumbnail from Supabase video URL FIRST
+      let thumbnail = "";
+      try {
+        console.log("🎬 [Video Handler] Creating signed URL for thumbnail generation:", asset.name);
+        const { data: urlData, error } = await supabase.storage
+          .from('assets')
+          .createSignedUrl(asset.file_path, 3600); // 1 hour expiry
+        
+        if (error) {
+          console.error(`Failed to create signed URL for thumbnail (${asset.name}):`, error);
+        } else if (urlData?.signedUrl) {
+          console.log("🎬 [Video Handler] Generating thumbnail for:", asset.name);
+          // Wait for thumbnail generation to complete
+          thumbnail = await generateVideoThumbnail(urlData.signedUrl);
+          console.log("🎬 [Video Handler] ✅ Successfully generated thumbnail for:", asset.name);
+        }
+      } catch (e) {
+        console.error(`🎬 [Video Handler] ❌ Failed to generate thumbnail for asset ${asset.name}:`, e);
+      }
+
+      // Find the best track and position for this video clip
+      const currentClips = [...clips, ...newClips]; // Include previously added clips in this batch
+      const { track: bestTrack, startTime: adjustedStartTime } = findBestTrack(currentClips, 'video', currentDropTime, asset.duration);
+
+      console.log("🎬 [Video Handler] Creating clip with thumbnail:", {
+        name: asset.name,
+        track: bestTrack,
+        hasThumbnail: !!thumbnail,
+        thumbnailLength: thumbnail.length
+      });
+
+      // Create a backend-ready timeline clip with the generated thumbnail
+      const newClip: Clip = {
+        id: `clip-${Date.now()}-${Math.random()}`,
+        name: asset.name,
+        start: adjustedStartTime,
+        end: adjustedStartTime + asset.duration,
+        track: bestTrack,
+        type: "video",
+        file_path: asset.file_path,
+        thumbnail: thumbnail, // Use generated thumbnail from Supabase video
+        effects: [],
+        _type: "VideoClip"
+      } as any;
+      
+      newClips.push(newClip);
+      
+      // Update drop time for next clip (place them sequentially)
+      currentDropTime = adjustedStartTime + asset.duration;
+    }
+    
+    if (newClips.length > 0) {
+      console.log("🎬 [Video Handler] Adding all clips to timeline:", newClips.map(c => ({ name: c.name, hasThumbnail: !!c.thumbnail })));
+      
+      // Add all clips at once
+      setClips([...clips, ...newClips]);
+      setSelectedClipId(newClips[newClips.length - 1].id); // Select the last added clip
+      
+      // Set the video source for the player if we don't have one yet
+      if (!videoSrc || clips.length === 0) {
+        const firstAsset = videoAssets[0];
+        const asset = getAssetById ? getAssetById(firstAsset.id) : firstAsset;
+        if (asset?.file_path) {
+          try {
+            const { data: urlData, error } = await supabase.storage
+              .from('assets')
+              .createSignedUrl(asset.file_path, 3600);
+            
+            if (!error && urlData?.signedUrl) {
+              setVideoSrc(urlData.signedUrl);
+              setDuration(asset.duration);
+              setActiveVideoAsset(asset);
+            }
+          } catch (e) {
+            console.error('Error creating signed URL for video player:', e);
+          }
+        }
+      }
+      
+      toast({
+        title: "Videos added to timeline",
+        description: `${newClips.length} video${newClips.length > 1 ? 's' : ''} added to the timeline`,
+      });
+    }
   };
 
   // Handle processed video update
@@ -344,6 +623,7 @@ export const useVideoHandler = () => {
     handleVideoSelect,
     handleVideoDrop,
     handleVideoAssetDrop,
+    handleMultipleVideoAssetDrop,
     handleVideoProcessed
   };
 };

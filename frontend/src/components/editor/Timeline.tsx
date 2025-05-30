@@ -16,6 +16,7 @@ interface TimelineProps {
     name?: string;
     text?: string;
     asset?: string;
+    thumbnail?: string;
   }[];
   onClipSelect?: (clipId: string | null) => void;
   selectedClipId?: string | null;
@@ -44,6 +45,7 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   // Debug: log clips prop on every render
   console.log("🎬 [Timeline] clips prop:", clips);
   console.log("🎬 [Timeline] clips length:", clips.length);
+  console.log("🎬 [Timeline] clips with thumbnails:", clips.filter(c => c.thumbnail).map(c => ({ id: c.id, name: c.name, hasThumbnail: !!c.thumbnail })));
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -60,6 +62,25 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   // Calculate dynamic track count based on clips
   const maxTrack = clips.length > 0 ? Math.max(...clips.map(clip => clip.track)) : 0;
   const trackCount = Math.max(maxTrack + 1, 3); // Minimum 3 tracks, expand as needed
+
+  // Get track height based on track index - video track (track 0) is taller
+  const getTrackHeight = (trackIndex: number) => {
+    if (trackIndex === 0) {
+      // Video track: height for iPhone aspect ratio (16:9) thumbnails
+      // Using 80px height to accommodate proper video thumbnails
+      return 80;
+    }
+    // Other tracks (overlay, text, etc.) keep original size
+    return 48;
+  };
+
+  // Get clip height based on track index
+  const getClipHeight = (trackIndex: number) => {
+    if (trackIndex === 0) {
+      return 76; // 4px margin from track height of 80px
+    }
+    return 40; // Original clip height for other tracks
+  };
 
   // Dynamic zoom calculation based on content
   const calculateOptimalZoom = useCallback(() => {
@@ -256,9 +277,22 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                           e.clientY >= timelineRect.top && e.clientY <= timelineRect.bottom;
     
     if (isOverTimeline) {
-      const trackHeight = 48 + 4;
       const headerHeight = 28;
-      const trackIndex = Math.floor((relativeY - headerHeight) / trackHeight);
+      let trackIndex = 0;
+      let currentY = headerHeight;
+      
+      // Calculate which track based on cumulative heights
+      for (let i = 0; i < trackCount; i++) {
+        const trackHeight = getTrackHeight(i) + 4; // Add gap
+        if (relativeY >= currentY && relativeY < currentY + trackHeight) {
+          trackIndex = i;
+          break;
+        }
+        currentY += trackHeight;
+        if (i === trackCount - 1) {
+          trackIndex = trackCount - 1; // Default to last track if beyond all tracks
+        }
+      }
       
       if (trackIndex >= 0 && trackIndex < trackCount) {
         const dropTime = (relativeX / timelineRect.width) * duration;
@@ -295,7 +329,7 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
     } else {
       setDropIndicator(null);
     }
-  }, [draggingClip, clips, duration, trackCount]);
+  }, [draggingClip, clips, duration, trackCount, getTrackHeight]);
 
   // Handle clip drag end
   const handleClipDragEnd = (e: React.DragEvent) => {
@@ -524,20 +558,43 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
     }
   };
 
-  // Get thumbnail background position based on current time
+  // Get thumbnail background style for video clips
   const getThumbnailStyle = (clipInfo: any) => {
-    if (!thumbnailsVisible) return {};
+    if (!thumbnailsVisible) {
+      console.log("🖼️ [Timeline] Thumbnails disabled globally");
+      return {};
+    }
     
-    // This would use real sprite data in a production implementation
-    // The background-position calculation would be based on the actual VTT data
-    const spritePosition = -(Math.floor(clipInfo.start) % 10) * 320;
+    // Debug logging
+    console.log("🖼️ [Timeline] Checking thumbnail for clip:", {
+      id: clipInfo.id,
+      name: clipInfo.name,
+      track: clipInfo.track,
+      type: clipInfo.type,
+      hasThumbnail: !!clipInfo.thumbnail,
+      thumbnailLength: clipInfo.thumbnail?.length || 0,
+      thumbnailPreview: clipInfo.thumbnail?.substring(0, 50) + "..." || "none"
+    });
     
-    return {
-      backgroundImage: `url(https://example.com/sprites/sample_sprite.png)`,
-      backgroundPosition: `${spritePosition}px 0`,
-      backgroundSize: 'auto 100%',
-      backgroundRepeat: 'no-repeat'
-    };
+    // For video clips on track 0, use the actual thumbnail
+    if (clipInfo.track === 0 && clipInfo.thumbnail && clipInfo.type === 'video') {
+      console.log("🖼️ [Timeline] ✅ Applying thumbnail for clip:", clipInfo.name);
+      const style = {
+        backgroundImage: `url(${clipInfo.thumbnail})`,
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      };
+      console.log("🖼️ [Timeline] Thumbnail style applied:", style);
+      return style;
+    } else {
+      console.log("🖼️ [Timeline] ❌ Not applying thumbnail:", {
+        reason: clipInfo.track !== 0 ? 'not track 0' : !clipInfo.thumbnail ? 'no thumbnail' : clipInfo.type !== 'video' ? 'not video type' : 'unknown'
+      });
+    }
+    
+    // For other clips, no background image
+    return {};
   };
 
   // Handle mouse down on trim handles
@@ -698,7 +755,8 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
             {Array.from({ length: trackCount }).map((_, index) => (
               <div 
                 key={index}
-                className="w-full h-12 bg-cre8r-gray-800 rounded border border-cre8r-gray-700 relative"
+                className="w-full bg-cre8r-gray-800 rounded border border-cre8r-gray-700 relative"
+                style={{ height: `${getTrackHeight(index)}px` }}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, index)}
@@ -706,31 +764,40 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                 {/* Render all clips for this track */}
                 {clips.filter(clip => clip.track === index).map((clip) => {
                   const isDragging = draggingClip?.clipId === clip.id;
+                  const clipHeight = getClipHeight(index);
+                  const marginTop = (getTrackHeight(index) - clipHeight) / 2; // Center clip in track
+                  
                   return (
                     <div
                       key={clip.id}
                       draggable
                       className={cn(
-                        "absolute h-10 my-1 rounded overflow-hidden cursor-move hover:opacity-100 transition-opacity",
+                        "absolute rounded overflow-hidden cursor-move hover:opacity-100 transition-opacity",
                         selectedClipId === clip.id ? "border-2 border-white ring-2 ring-cre8r-violet opacity-100" : "opacity-90 hover:ring-1 hover:ring-white border-0",
                         isDragging && "opacity-30 z-50 scale-95 transition-all duration-200"
                       )}
                       style={{
                         left: `${(clip.start / duration) * 100}%`,
                         width: `${((clip.end - clip.start) / duration) * 100}%`,
+                        height: `${clipHeight}px`,
+                        top: `${marginTop}px`,
                         ...getThumbnailStyle(clip)
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
                         console.log('[Timeline] Clip clicked:', clip.id, clip.type);
+                        console.log('[Timeline] Clip has thumbnail:', !!clip.thumbnail);
+                        if (clip.thumbnail) {
+                          console.log('[Timeline] Thumbnail data:', clip.thumbnail.substring(0, 100) + "...");
+                        }
                         onClipSelect?.(clip.id);
                       }}
                       onDragStart={(e) => handleClipDragStart(e, clip)}
                       onDragEnd={handleClipDragEnd}
                       title={clip.name || clip.text || clip.asset || "Edit"}
                     >
-                    <div className={`h-full w-full bg-gradient-to-r ${getClipStyle(clip.type)} flex items-center justify-center px-2 bg-opacity-70`}>
-                      <span className="text-xs text-white truncate font-medium">
+                    <div className={`h-full w-full ${clip.track === 0 && clip.thumbnail ? '' : `bg-gradient-to-r ${getClipStyle(clip.type)}`} flex items-center justify-center px-2 ${clip.track === 0 && clip.thumbnail ? 'bg-black bg-opacity-40' : 'bg-opacity-70'}`}>
+                      <span className={`text-xs text-white truncate font-medium ${clip.track === 0 && clip.thumbnail ? 'text-shadow' : ''}`}>
                         {clip.name || clip.text || clip.asset || formatTime(clip.end - clip.start)}
                       </span>
                     </div>

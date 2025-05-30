@@ -156,8 +156,27 @@ export default {
 				'fade-out': 'fade-out 0.3s ease-out',
 				'slide-down': 'slide-down 0.3s ease-out',
 				'slide-up': 'slide-up 0.3s ease-out',
+			},
+			textShadow: {
+				'sm': '1px 1px 2px rgba(0, 0, 0, 0.5)',
+				'DEFAULT': '2px 2px 4px rgba(0, 0, 0, 0.5)',
+				'lg': '3px 3px 6px rgba(0, 0, 0, 0.7)',
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [
+		require("tailwindcss-animate"),
+		function({ addUtilities, theme }: any) {
+			const textShadowUtilities = Object.entries(theme('textShadow')).reduce(
+				(acc: any, [key, value]) => {
+					acc[`.text-shadow${key === 'DEFAULT' ? '' : `-${key}`}`] = {
+						textShadow: value,
+					};
+					return acc;
+				},
+				{}
+			);
+			addUtilities(textShadowUtilities);
+		}
+	],
 } satisfies Config;
