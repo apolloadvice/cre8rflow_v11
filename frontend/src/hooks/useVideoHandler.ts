@@ -377,7 +377,16 @@ export const useVideoHandler = () => {
     } as any;
     
     console.log("🎬 [Video Handler] Adding clip to timeline:", newClip);
-    setClips([...clips, newClip]);
+    const updatedClips = [...clips, newClip];
+    setClips(updatedClips);
+    
+    // Force recalculate duration after adding clip
+    setTimeout(() => {
+      const { recalculateDuration } = useEditorStore.getState();
+      console.log("🎬 [Video Handler] Manually calling recalculateDuration...");
+      recalculateDuration();
+    }, 100); // Small delay to ensure state is updated
+    
     setSelectedClipId(newClip.id);
     
     // Set the video source for the player if we don't have one yet or if this is the first clip
@@ -432,12 +441,14 @@ export const useVideoHandler = () => {
 
   const handleMultipleVideoAssetDrop = async (videoAssets: any[], track: number, dropTime: number) => {
     console.log("🎬 [Video Handler] Multiple assets dropped:", videoAssets.map(a => a.name));
+    console.log("🎬 [Video Handler] Initial drop time:", dropTime, "Initial track:", track);
     
     let currentDropTime = dropTime;
     const newClips: Clip[] = [];
     
-    for (const videoAsset of videoAssets) {
-      console.log("🎬 [Video Handler] Processing asset:", videoAsset.name);
+    for (let i = 0; i < videoAssets.length; i++) {
+      const videoAsset = videoAssets[i];
+      console.log(`🎬 [Video Handler] Processing asset ${i + 1}/${videoAssets.length}:`, videoAsset.name);
       
       // Always look up the asset in the asset store by id
       const asset = getAssetById ? getAssetById(videoAsset.id) : videoAsset;
@@ -445,6 +456,12 @@ export const useVideoHandler = () => {
         console.warn(`Skipping asset ${videoAsset.name}: file path not found`);
         continue;
       }
+
+      console.log(`🎬 [Video Handler] Asset details:`, {
+        name: asset.name,
+        duration: asset.duration,
+        currentDropTime: currentDropTime
+      });
 
       // Generate thumbnail from Supabase video URL FIRST
       let thumbnail = "";
@@ -466,24 +483,25 @@ export const useVideoHandler = () => {
         console.error(`🎬 [Video Handler] ❌ Failed to generate thumbnail for asset ${asset.name}:`, e);
       }
 
-      // Find the best track and position for this video clip
-      const currentClips = [...clips, ...newClips]; // Include previously added clips in this batch
-      const { track: bestTrack, startTime: adjustedStartTime } = findBestTrack(currentClips, 'video', currentDropTime, asset.duration);
-
-      console.log("🎬 [Video Handler] Creating clip with thumbnail:", {
-        name: asset.name,
-        track: bestTrack,
-        hasThumbnail: !!thumbnail,
-        thumbnailLength: thumbnail.length
+      // For sequential placement, use the current drop time directly
+      // Don't use findBestTrack for multi-drop to ensure sequential placement
+      const clipStartTime = currentDropTime;
+      const clipEndTime = clipStartTime + asset.duration;
+      
+      console.log(`🎬 [Video Handler] Placing clip "${asset.name}" at:`, {
+        start: clipStartTime,
+        end: clipEndTime,
+        duration: asset.duration,
+        track: track
       });
 
       // Create a backend-ready timeline clip with the generated thumbnail
       const newClip: Clip = {
         id: `clip-${Date.now()}-${Math.random()}`,
         name: asset.name,
-        start: adjustedStartTime,
-        end: adjustedStartTime + asset.duration,
-        track: bestTrack,
+        start: clipStartTime,
+        end: clipEndTime,
+        track: track, // Use the original track for all clips in multi-drop
         type: "video",
         file_path: asset.file_path,
         thumbnail: thumbnail, // Use generated thumbnail from Supabase video
@@ -494,14 +512,31 @@ export const useVideoHandler = () => {
       newClips.push(newClip);
       
       // Update drop time for next clip (place them sequentially)
-      currentDropTime = adjustedStartTime + asset.duration;
+      currentDropTime = clipEndTime; // Use the end time of this clip
+      
+      console.log(`🎬 [Video Handler] Next drop time will be:`, currentDropTime);
     }
     
     if (newClips.length > 0) {
-      console.log("🎬 [Video Handler] Adding all clips to timeline:", newClips.map(c => ({ name: c.name, hasThumbnail: !!c.thumbnail })));
+      console.log("🎬 [Video Handler] Final clips to add:", newClips.map(c => ({ 
+        name: c.name, 
+        start: c.start, 
+        end: c.end, 
+        duration: c.end - c.start,
+        hasThumbnail: !!c.thumbnail 
+      })));
       
       // Add all clips at once
-      setClips([...clips, ...newClips]);
+      const updatedClips = [...clips, ...newClips];
+      setClips(updatedClips);
+      
+      // Force recalculate duration after adding multiple clips
+      setTimeout(() => {
+        const { recalculateDuration } = useEditorStore.getState();
+        console.log("🎬 [Video Handler] Manually calling recalculateDuration after multiple clip add...");
+        recalculateDuration();
+      }, 100); // Small delay to ensure state is updated
+      
       setSelectedClipId(newClips[newClips.length - 1].id); // Select the last added clip
       
       // Set the video source for the player if we don't have one yet

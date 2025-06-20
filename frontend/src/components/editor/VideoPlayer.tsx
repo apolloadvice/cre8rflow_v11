@@ -241,16 +241,43 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(({
             Your browser does not support the video tag.
           </video>
           {/* Overlay Layer */}
-          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-            {activeOverlays.map((ovl, i) =>
-              ovl.type === "text" ? (
-                <div key={i} className="text-white text-3xl font-bold bg-black/60 px-4 py-2 rounded shadow-lg">
-                  {ovl.text}
-                </div>
-              ) : ovl.type === "overlay" ? (
-                <img key={i} src={ovl.asset} alt="overlay" className="max-h-1/2 max-w-1/2 object-contain" />
-              ) : null
-            )}
+          <div className="pointer-events-none absolute inset-0 z-10">
+            {activeOverlays.map((ovl, i) => {
+              if (ovl.type === "text") {
+                // Use clip styling if available, otherwise use defaults
+                const clipStyle = ovl.style || {};
+                const fontSize = clipStyle.fontSize || '12px';
+                const position = clipStyle.position || 'bottom-third';
+                const backgroundColor = clipStyle.backgroundColor || 'transparent';
+                
+                // Position mapping
+                const positionClasses = {
+                  'bottom-center': 'bottom-4 left-1/2 transform -translate-x-1/2',
+                  'bottom-third': 'bottom-1/3 left-1/2 transform -translate-x-1/2',
+                  'center': 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2',
+                  'top': 'top-4 left-1/2 transform -translate-x-1/2',
+                  'bottom': 'bottom-4 left-1/2 transform -translate-x-1/2'
+                };
+                
+                return (
+                  <div 
+                    key={i} 
+                    className={`absolute text-white font-bold px-2 py-1 ${positionClasses[position] || positionClasses['bottom-third']}`}
+                    style={{
+                      fontSize: fontSize,
+                      backgroundColor: backgroundColor,
+                      color: clipStyle.color || '#ffffff',
+                      fontWeight: clipStyle.fontWeight || 'bold'
+                    }}
+                  >
+                    {ovl.text}
+                  </div>
+                );
+              } else if (ovl.type === "overlay") {
+                return <img key={i} src={ovl.asset} alt="overlay" className="max-h-1/2 max-w-1/2 object-contain" />;
+              }
+              return null;
+            })}
           </div>
         </>
       ) : (

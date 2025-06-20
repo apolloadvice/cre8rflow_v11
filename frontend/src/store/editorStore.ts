@@ -127,8 +127,20 @@ export const useEditorStore = create<EditorStore>()(
         console.trace("🎬 [Store] setClips call stack");
         
         set({ clips });
-        get().recalculateDuration();
+        
+        console.log("🎬 [Store] About to call recalculateDuration...");
+        try {
+          const state = get();
+          console.log("🎬 [Store] Got state, calling recalculateDuration");
+          state.recalculateDuration();
+          console.log("🎬 [Store] recalculateDuration call completed");
+        } catch (error) {
+          console.error("🎬 [Store] Error calling recalculateDuration:", error);
+        }
+        
+        console.log("🎬 [Store] About to call pushToHistory...");
         get().pushToHistory();
+        console.log("🎬 [Store] setClips completed");
       },
       
       addClip: (clip) => {
@@ -257,10 +269,51 @@ export const useEditorStore = create<EditorStore>()(
       // Computed functions
       recalculateDuration: () => {
         const { clips } = get();
-        if (clips.length === 0) return;
+        console.log('🎬 [Store] recalculateDuration called with clips:', clips);
         
+        if (clips.length === 0) {
+          console.log('🎬 [Store] No clips, setting duration to 0');
+          set({ duration: 0 });
+          return;
+        }
+        
+        // Log all clip positions for debugging
+        clips.forEach((clip, index) => {
+          console.log(`🎬 [Store] Clip ${index + 1}: ${clip.name} - Track: ${clip.track}, Start: ${clip.start}s, End: ${clip.end}s, Duration: ${clip.end - clip.start}s`);
+        });
+        
+        // Calculate the maximum end time across all clips
         const maxEnd = Math.max(...clips.map(clip => clip.end));
-        set({ duration: maxEnd });
+        
+        // Calculate what the duration would be if clips were sequential
+        const totalSequentialDuration = clips.reduce((total, clip) => total + (clip.end - clip.start), 0);
+        
+        // Set a minimum duration for better UX (at least 30 seconds if there are clips)
+        const newDuration = Math.max(maxEnd, 30);
+        
+        console.log('🎬 [Store] Duration calculation:', {
+          maxEnd,
+          totalSequentialDuration,
+          newDuration,
+          clipCount: clips.length,
+          clipEndTimes: clips.map(c => ({ id: c.id, name: c.name, end: c.end })),
+          allClipPositions: clips.map(c => ({ 
+            name: c.name, 
+            track: c.track, 
+            start: c.start, 
+            end: c.end, 
+            duration: c.end - c.start 
+          }))
+        });
+        
+        console.log('🎬 [Store] Expected vs Actual:', {
+          expected: 'Sequential clips should have total duration = sum of individual durations',
+          expectedTotal: totalSequentialDuration,
+          actualMaxEnd: maxEnd,
+          issue: maxEnd < totalSequentialDuration ? 'Clips are overlapping!' : 'Clips positioned correctly'
+        });
+        
+        set({ duration: newDuration });
       },
       
       addAsset: (asset) => set((state) => ({ assets: [...state.assets, asset] })),

@@ -1,7 +1,10 @@
-import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { debounce } from "lodash";
 import Playhead from "./Playhead";
+import AnimationOverlay from "./AnimationOverlay";
+import TimelineLoadingOverlay from "./TimelineLoadingOverlay";
+import { useEditorStore } from "@/store/editorStore";
 
 interface TimelineProps {
   duration: number;
@@ -40,12 +43,51 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   onClipUpdate,
   onClipMove,
 }, ref) => {
-  console.log('[Timeline] RENDER');
+  // Reduced debug logging to prevent render loop
+  console.log('[Timeline] RENDER - clips:', clips.length);
 
-  // Debug: log clips prop on every render
-  console.log("🎬 [Timeline] clips prop:", clips);
-  console.log("🎬 [Timeline] clips length:", clips.length);
-  console.log("🎬 [Timeline] clips with thumbnails:", clips.filter(c => c.thumbnail).map(c => ({ id: c.id, name: c.name, hasThumbnail: !!c.thumbnail })));
+  // Pre-compute thumbnail styles to avoid recalculating on every render
+  const thumbnailStyles = useMemo(() => {
+    const styles: Record<string, any> = {};
+    clips.forEach(clip => {
+      if (clip.thumbnail) {
+        styles[clip.id] = {
+          backgroundImage: `url(${clip.thumbnail})`,
+          backgroundSize: "contain",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        };
+      }
+    });
+    
+    if (clips.length > 0) {
+      console.log("🖼️ [Timeline] Computed thumbnail styles for", Object.keys(styles).length, "clips");
+    }
+    
+    return styles;
+  }, [clips.map(c => c.id + c.thumbnail).join(',')]); // Only recompute when clip IDs or thumbnails change
+
+  // Debounced duration analysis to prevent excessive logging
+  const debouncedDurationAnalysis = useCallback(
+    debounce(() => {
+      if (clips.length > 0) {
+        const totalIndividualDuration = clips.reduce((sum, clip) => sum + (clip.end - clip.start), 0);
+        const maxEnd = Math.max(...clips.map(clip => clip.end));
+        
+        console.log("🎬 [Timeline] DURATION ANALYSIS:", {
+          clipsCount: clips.length,
+          totalDuration: totalIndividualDuration.toFixed(2),
+          maxEnd: maxEnd.toFixed(2),
+          timelineDuration: duration.toFixed(2),
+        });
+      }
+    }, 500), // Debounce by 500ms
+    [clips, duration]
+  );
+
+  useEffect(() => {
+    debouncedDurationAnalysis();
+  }, [debouncedDurationAnalysis]);
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -58,6 +100,30 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   
   // Use the forwarded ref or fall back to internal ref
   const resolvedRef = (ref as React.RefObject<HTMLDivElement>) || timelineRef;
+  
+  // Add effect to force duration recalculation when clips change - debounced to prevent excessive calls
+  const debouncedRecalculateDuration = useCallback(
+    debounce(() => {
+      if (clips.length > 0) {
+        const maxEnd = Math.max(...clips.map(clip => clip.end));
+        console.log("🎬 [Timeline] Calculated maxEnd:", maxEnd);
+        console.log("🎬 [Timeline] Current duration vs maxEnd:", duration, "vs", maxEnd);
+        
+        // If duration doesn't match, force recalculation
+        if (Math.abs(duration - maxEnd) > 0.1) {
+          console.log("🎬 [Timeline] Duration mismatch detected, forcing recalculation");
+          const { recalculateDuration } = useEditorStore.getState();
+          recalculateDuration();
+        }
+      }
+    }, 100), // Debounce by 100ms
+    [clips, duration]
+  );
+
+  useEffect(() => {
+    console.log("🎬 [Timeline] Clips changed, scheduling duration recalculation");
+    debouncedRecalculateDuration();
+  }, [clips, debouncedRecalculateDuration]);
   
   // Calculate dynamic track count based on clips
   const maxTrack = clips.length > 0 ? Math.max(...clips.map(clip => clip.track)) : 0;
@@ -119,7 +185,7 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
     });
     
     return calculatedZoom;
-  }, [resolvedRef, clips.length, duration, isAutoZoom, zoom]);
+  }, [resolvedRef, clips.length, duration, isAutoZoom]);
   
   // Auto-zoom effect when content changes
   useEffect(() => {
@@ -131,6 +197,17 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
     }
   }, [clips.length, duration, isAutoZoom, calculateOptimalZoom]);
   
+  // Effect to handle duration changes - log when duration changes
+  useEffect(() => {
+    console.log('🎬 [Timeline] Duration changed to:', duration);
+    console.log('🎬 [Timeline] Current clips count:', clips.length);
+    
+    // If we have clips but duration is still 0, there might be an issue
+    if (clips.length > 0 && duration === 0) {
+      console.warn('🎬 [Timeline] Warning: We have clips but duration is 0!');
+    }
+  }, [duration, clips.length]);
+
   // Zoom to fit content function
   const zoomToFit = () => {
     const optimalZoom = calculateOptimalZoom();
@@ -148,7 +225,28 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   // Generate time markers based on duration and zoom
   const generateTimeMarkers = () => {
     const markers = [];
-    const step = 5; // 5 second intervals
+    
+    // Handle case where duration is 0 or very small
+    if (duration <= 0) {
+      return markers;
+    }
+    
+    // Dynamic step size based on duration for better spacing
+    let step = 5; // Default 5 second intervals
+    
+    if (duration <= 30) {
+      step = 5; // 5 second intervals for short durations
+    } else if (duration <= 120) {
+      step = 10; // 10 second intervals for medium durations  
+    } else if (duration <= 600) {
+      step = 30; // 30 second intervals for longer durations
+    } else {
+      step = 60; // 1 minute intervals for very long durations
+    }
+    
+    // Remove excessive logging - only log when step changes significantly
+    // console.log(`🎬 [Timeline] Generating markers with duration=${duration}, step=${step}`);
+    
     for (let i = 0; i <= duration; i += step) {
       markers.push(
         <div
@@ -160,6 +258,21 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
         </div>
       );
     }
+    
+    // Always add a marker at the very end if it's not already there
+    const lastMarkerTime = Math.floor(duration / step) * step;
+    if (lastMarkerTime < duration) {
+      markers.push(
+        <div
+          key="end"
+          className="absolute h-3 border-l border-cre8r-gray-600 text-xs text-cre8r-gray-400"
+          style={{ left: '100%' }}
+        >
+          <span className="absolute top-3 left-1">{formatTime(duration)}</span>
+        </div>
+      );
+    }
+    
     return markers;
   };
 
@@ -385,10 +498,10 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
   // Handle drag over for video dropping and clip moving
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, trackIndex: number) => {
     e.preventDefault();
+    e.stopPropagation(); // Always prevent event bubbling
     
     // If we're dragging a clip, let the global handler manage the drop indicator
     if (draggingClip) {
-      e.stopPropagation();
       return;
     }
     
@@ -448,6 +561,7 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event from bubbling up to parent components
     
     // If we're dragging a clip, let the global handler manage the drop indicator
     if (draggingClip) {
@@ -463,6 +577,7 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, trackIndex: number) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event from bubbling up to parent components
     const target = e.currentTarget as HTMLDivElement;
     target.style.backgroundColor = "";
     target.style.borderLeft = "";
@@ -556,45 +671,6 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
         console.error("Error parsing dragged asset:", error);
       }
     }
-  };
-
-  // Get thumbnail background style for video clips
-  const getThumbnailStyle = (clipInfo: any) => {
-    if (!thumbnailsVisible) {
-      console.log("🖼️ [Timeline] Thumbnails disabled globally");
-      return {};
-    }
-    
-    // Debug logging
-    console.log("🖼️ [Timeline] Checking thumbnail for clip:", {
-      id: clipInfo.id,
-      name: clipInfo.name,
-      track: clipInfo.track,
-      type: clipInfo.type,
-      hasThumbnail: !!clipInfo.thumbnail,
-      thumbnailLength: clipInfo.thumbnail?.length || 0,
-      thumbnailPreview: clipInfo.thumbnail?.substring(0, 50) + "..." || "none"
-    });
-    
-    // For video clips on track 0, use the actual thumbnail
-    if (clipInfo.track === 0 && clipInfo.thumbnail && clipInfo.type === 'video') {
-      console.log("🖼️ [Timeline] ✅ Applying thumbnail for clip:", clipInfo.name);
-      const style = {
-        backgroundImage: `url(${clipInfo.thumbnail})`,
-        backgroundSize: 'contain',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      };
-      console.log("🖼️ [Timeline] Thumbnail style applied:", style);
-      return style;
-    } else {
-      console.log("🖼️ [Timeline] ❌ Not applying thumbnail:", {
-        reason: clipInfo.track !== 0 ? 'not track 0' : !clipInfo.thumbnail ? 'no thumbnail' : clipInfo.type !== 'video' ? 'not video type' : 'unknown'
-      });
-    }
-    
-    // For other clips, no background image
-    return {};
   };
 
   // Handle mouse down on trim handles
@@ -712,7 +788,11 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
         <div 
           ref={resolvedRef}
           className="relative h-full"
-          style={{ width: `${100 * zoom}%`, minWidth: "100%" }}
+          style={{ 
+            width: `${Math.max(100 * zoom, 100)}%`, 
+            // Ensure minimum width for timeline interaction even with short durations
+            minWidth: duration > 0 ? `${Math.max(800, duration * 20)}px` : "800px"
+          }}
           onClick={(e) => {
             // Deselect any selected clip when clicking empty timeline space
             if (e.target === e.currentTarget) {
@@ -781,15 +861,12 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
                         width: `${((clip.end - clip.start) / duration) * 100}%`,
                         height: `${clipHeight}px`,
                         top: `${marginTop}px`,
-                        ...getThumbnailStyle(clip)
+                        ...(thumbnailsVisible && thumbnailStyles[clip.id] ? thumbnailStyles[clip.id] : {})
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        console.log('[Timeline] Clip clicked:', clip.id, clip.type);
-                        console.log('[Timeline] Clip has thumbnail:', !!clip.thumbnail);
-                        if (clip.thumbnail) {
-                          console.log('[Timeline] Thumbnail data:', clip.thumbnail.substring(0, 100) + "...");
-                        }
+                        // Reduced logging to prevent console spam
+                        console.log('[Timeline] Clip clicked:', clip.id);
                         onClipSelect?.(clip.id);
                       }}
                       onDragStart={(e) => handleClipDragStart(e, clip)}
@@ -858,6 +935,20 @@ const Timeline = forwardRef<HTMLDivElement, TimelineProps>(({
 
           {/* Playhead */}
           <Playhead timelineRef={resolvedRef} />
+          
+          {/* Animation Overlay */}
+          <AnimationOverlay
+            duration={duration}
+            zoom={zoom}
+            trackHeight={getTrackHeight(0)}
+            timelineWidth={resolvedRef.current?.getBoundingClientRect().width || 800}
+          />
+          
+          {/* Timeline Loading Overlay */}
+          <TimelineLoadingOverlay
+            duration={duration}
+            timelineWidth={resolvedRef.current?.getBoundingClientRect().width || 800}
+          />
         </div>
       </div>
       </div>

@@ -37,6 +37,9 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedVideos, setUploadedVideos] = useState<VideoAsset[]>(placeholderVideos);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set());
+  const [selectionOrder, setSelectionOrder] = useState<string[]>([]); // Track order of selection
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number>(-1);
   const { setActiveVideoAsset, addAsset } = useEditorStore();
 
   // Fetch assets from backend and storage, auto-register missing
@@ -51,68 +54,148 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
       console.log("Registered assets:", assets);
       
       // 2. Fetch files from Supabase Storage bucket 'assets'
+      console.log("Fetching storage files...");
       const { data: storageFiles, error: storageError } = await supabase.storage.from("assets").list("user123", { limit: 1000 });
       if (storageError) {
         console.error("Storage error:", storageError);
-        throw new Error(`Failed to fetch storage files: ${storageError.message}`);
+        // Don't throw here, continue with just registered assets
+        console.log("Continuing with registered assets only due to storage error");
+      } else {
+        console.log("Storage files:", storageFiles);
       }
-      console.log("Storage files:", storageFiles);
       
       const registeredPaths = new Set(assets.map((a: any) => a.path));
       console.log("Registered paths:", Array.from(registeredPaths));
       
-      // 3. Register any missing files
-      for (const file of storageFiles || []) {
-        const filePath = `user123/${file.name}`;
-        console.log(`Checking file: ${filePath}, registered: ${registeredPaths.has(filePath)}`);
-        
-        if (!registeredPaths.has(filePath)) {
-          console.log(`Registering missing file: ${filePath}`);
+      // 3. Find files not in the registered assets (auto-register missing files)
+      const missingFiles = storageFiles?.filter((f: any) => 
+        f.name.endsWith(".mp4") || f.name.endsWith(".mov") || f.name.endsWith(".avi")
+      ).filter((f: any) => !registeredPaths.has(`user123/${f.name}`)) || [];
+      
+      console.log("Missing files to auto-register:", missingFiles);
+      
+      // 4. Auto-register missing files (skip if storage error)
+      let autoRegisteredCount = 0;
+      if (!storageError && missingFiles.length > 0) {
+        for (const file of missingFiles) {
           try {
+            console.log("Auto-registering file:", file.name);
+            
+            // Create signed URL to get metadata
+            const { data: urlData, error: urlError } = await supabase.storage
+              .from('assets')
+              .createSignedUrl(`user123/${file.name}`, 60); // 1 minute for metadata extraction
+            
+            if (urlError) {
+              console.error(`Failed to create signed URL for ${file.name}:`, urlError);
+              continue;
+            }
+            
+            const videoUrl = urlData.signedUrl;
+            
+            // Extract metadata
+            const videoElement = document.createElement("video");
+            videoElement.crossOrigin = "anonymous";
+            videoElement.src = videoUrl;
+            
+            await new Promise((resolve, reject) => {
+              videoElement.onloadedmetadata = resolve;
+              videoElement.onerror = reject;
+              setTimeout(reject, 10000); // 10 second timeout
+            });
+            
+            const metadata = {
+              original_name: file.name,
+              path: `user123/${file.name}`,
+              duration: videoElement.duration,
+              width: videoElement.videoWidth || 1920,
+              height: videoElement.videoHeight || 1080,
+              size: file.metadata?.size || 0,
+              mimetype: file.metadata?.mimetype || "video/mp4"
+            };
+            
+            console.log("Extracted metadata for auto-registration:", metadata);
+            
             const registerRes = await fetch("/api/assets/register", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ path: filePath, originalName: file.name }),
+              body: JSON.stringify(metadata)
             });
-            const registerResult = await registerRes.json();
-            console.log(`Registration result for ${filePath}:`, registerResult);
-          } catch (regError) {
-            console.error(`Failed to register ${filePath}:`, regError);
+            
+            if (registerRes.ok) {
+              console.log(`Successfully auto-registered ${file.name}`);
+              autoRegisteredCount++;
+            } else {
+              console.error(`Failed to auto-register ${file.name}`);
+            }
+          } catch (error) {
+            console.error(`Error auto-registering ${file.name}:`, error);
           }
         }
       }
       
-      // 4. Fetch the updated asset list
-      const res2 = await fetch("/api/assets/list");
-      if (!res2.ok) throw new Error("Failed to fetch updated assets");
-      const updatedAssets = await res2.json();
-      console.log("Updated assets:", updatedAssets);
+      // 5. Re-fetch updated assets if any were auto-registered
+      let updatedAssets = assets;
+      if (autoRegisteredCount > 0) {
+        console.log(`Re-fetching assets after auto-registering ${autoRegisteredCount} files...`);
+        const updatedRes = await fetch("/api/assets/list");
+        if (updatedRes.ok) {
+          updatedAssets = await updatedRes.json();
+          console.log("Updated assets after auto-registration:", updatedAssets);
+        }
+      }
       
-      // 5. Generate thumbnails and video URLs for assets
-      const mapped = await Promise.all(updatedAssets.map(async (a: any) => {
-        // Get Supabase Storage signed URL for the video (more reliable than public URL)
+      console.log(`Processing ${updatedAssets.length} assets for thumbnails...`);
+      
+      // 6. Generate thumbnails and video URLs for assets (with better error handling)
+      const mapped = await Promise.allSettled(updatedAssets.map(async (a: any) => {
+        console.log(`Processing asset: ${a.original_name || a.path}`);
+        
+        // Get Supabase Storage signed URL for the video with CORS headers
         let videoUrl = null;
         try {
           const { data: urlData, error: urlError } = await supabase.storage
             .from('assets')
-            .createSignedUrl(a.path, 3600); // 1 hour expiry
+            .createSignedUrl(a.path, 3600, {
+              download: false // Ensure we get a viewable URL, not a download URL
+            });
           
           if (urlError) {
             console.error(`Failed to create signed URL for ${a.path}:`, urlError);
           } else {
             videoUrl = urlData?.signedUrl;
+            console.log(`✅ Created signed URL for ${a.original_name || a.path}`);
           }
         } catch (e) {
           console.error(`Error creating signed URL for ${a.path}:`, e);
         }
         
         // Generate thumbnail from video if URL is available
-        let thumbnail = "https://i.imgur.com/JcGrHtu.jpg"; // fallback
+        let thumbnail = ""; // Start with empty - no fallback thumbnails as requested
         if (videoUrl) {
           try {
+            console.log(`Generating thumbnail for ${a.original_name || a.path}...`);
             thumbnail = await generateVideoThumbnail(videoUrl);
+            console.log(`✅ Generated thumbnail for ${a.original_name || a.path}`);
           } catch (e) {
             console.warn(`Failed to generate thumbnail for ${a.path}:`, e);
+            // If CORS fails, try creating a new signed URL without download flag
+            if (e.message?.includes('SecurityError') || e.message?.includes('tainted') || e.message?.includes('CORS')) {
+              try {
+                console.log(`Retrying thumbnail generation with public URL for ${a.original_name || a.path}...`);
+                const { data: publicData } = supabase.storage
+                  .from('assets')
+                  .getPublicUrl(a.path);
+                
+                if (publicData?.publicUrl) {
+                  thumbnail = await generateVideoThumbnail(publicData.publicUrl);
+                  console.log(`✅ Generated thumbnail with public URL for ${a.original_name || a.path}`);
+                }
+              } catch (retryError) {
+                console.error(`Retry also failed for ${a.path}:`, retryError);
+                // Leave thumbnail empty as requested - no fallbacks
+              }
+            }
           }
         }
         
@@ -131,11 +214,24 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
         };
       }));
       
-      console.log("Mapped assets with thumbnails:", mapped);
-      setUploadedVideos(mapped);
+      // Handle settled promises (both fulfilled and rejected)
+      const successfulAssets = mapped
+        .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+        .map(result => result.value);
+      
+      const failedAssets = mapped
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map(result => result.reason);
+      
+      if (failedAssets.length > 0) {
+        console.warn(`Failed to process ${failedAssets.length} assets:`, failedAssets);
+      }
+      
+      console.log(`Successfully processed ${successfulAssets.length} assets:`, successfulAssets);
+      setUploadedVideos(successfulAssets);
       
       // Add assets to the editor store for drag and drop functionality
-      mapped.forEach(asset => {
+      successfulAssets.forEach(asset => {
         addAsset({
           id: asset.id,
           name: asset.name,
@@ -144,59 +240,177 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
         });
       });
       
-    } catch (e) {
-      console.error("fetchAndSyncAssets error:", e);
-      toast({ title: "Failed to load assets", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+      console.log(`✅ Completed fetchAndSyncAssets with ${successfulAssets.length} assets`);
+      
+    } catch (error) {
+      console.error("Error in fetchAndSyncAssets:", error);
+      toast({
+        title: "Failed to fetch assets",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      });
     }
-  }, [toast]);
+  }, [toast, addAsset]);
 
   // Function to generate thumbnail from video URL
   const generateVideoThumbnail = (videoUrl: string): Promise<string> => {
     return new Promise((resolve, reject) => {
+      console.log(`🎬 [AssetPanel] Starting thumbnail generation for URL: ${videoUrl.substring(0, 100)}...`);
+      
       const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
+      video.crossOrigin = 'anonymous'; // Required to avoid canvas taint issues
       video.muted = true; // Required for autoplay in some browsers
       video.preload = 'metadata';
+      video.playsInline = true; // Better support for mobile/iOS
       
-      video.onloadedmetadata = () => {
-        // Set the time to capture thumbnail (1 second or 10% of duration, whichever is smaller)
-        video.currentTime = Math.min(1, video.duration * 0.1);
+      let isResolved = false;
+      let timeoutId: NodeJS.Timeout | null = null;
+      
+      let cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+        video.removeEventListener('abort', onAbort);
+        video.removeEventListener('canplay', onCanPlay);
+        video.src = '';
+        video.load(); // Clear video element completely
       };
       
-      video.onseeked = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth || 320;
-          canvas.height = video.videoHeight || 240;
-          const ctx = canvas.getContext('2d');
-          
-          if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            resolve(thumbnailDataUrl);
-          } else {
-            reject(new Error('Failed to get valid video dimensions or canvas context'));
-          }
-        } catch (e) {
-          reject(e);
+      const resolveOnce = (result: string) => {
+        if (!isResolved) {
+          isResolved = true;
+          cleanup();
+          console.log(`🎬 [AssetPanel] ✅ Successfully generated thumbnail`);
+          resolve(result);
         }
       };
       
-      video.onerror = (e) => {
-        console.error('Video error event:', e);
-        reject(new Error('Failed to load video for thumbnail generation'));
+      const rejectOnce = (error: Error) => {
+        if (!isResolved) {
+          isResolved = true;
+          cleanup();
+          console.error(`🎬 [AssetPanel] ❌ Failed to generate thumbnail:`, error);
+          reject(error);
+        }
       };
       
-      video.onabort = () => {
-        reject(new Error('Video loading was aborted'));
+      const onLoadedMetadata = () => {
+        console.log(`🎬 [AssetPanel] Video metadata loaded - duration: ${video.duration}s, dimensions: ${video.videoWidth}x${video.videoHeight}`);
+        
+        // Validate video dimensions before proceeding
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          console.warn(`🎬 [AssetPanel] Video has invalid dimensions, waiting for canplay event...`);
+          return; // Wait for canplay event which might have correct dimensions
+        }
+        
+        try {
+          // Always use 1 second as requested by user, with fallback for very short videos
+          let seekTime = 1.0;
+          if (video.duration < 1.0) {
+            seekTime = Math.max(0.1, video.duration * 0.5); // Use middle point for very short videos
+          }
+          console.log(`🎬 [AssetPanel] Seeking to ${seekTime}s for thumbnail capture`);
+          video.currentTime = seekTime;
+        } catch (e) {
+          rejectOnce(new Error(`Failed to seek video: ${e}`));
+        }
       };
       
-      // Set timeout to prevent hanging
-      setTimeout(() => {
-        reject(new Error('Timeout: Video took too long to load'));
-      }, 10000); // 10 second timeout
+      const onCanPlay = () => {
+        console.log(`🎬 [AssetPanel] Video can play - dimensions: ${video.videoWidth}x${video.videoHeight}`);
+        // If we still don't have dimensions from loadedmetadata, try again here
+        if (video.videoWidth > 0 && video.videoHeight > 0 && video.currentTime === 0) {
+          onLoadedMetadata();
+        }
+      };
       
-      video.src = videoUrl;
+      const onSeeked = () => {
+        console.log(`🎬 [AssetPanel] Video seeked successfully to ${video.currentTime}s, capturing frame...`);
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            throw new Error('Failed to get canvas 2D context');
+          }
+          
+          // Use fallback dimensions if video dimensions are still invalid
+          const width = video.videoWidth || 320;
+          const height = video.videoHeight || 240;
+          
+          if (width === 0 || height === 0) {
+            throw new Error('Video has invalid dimensions even after canplay');
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Clear canvas with black background first
+          ctx.fillStyle = 'black';
+          ctx.fillRect(0, 0, width, height);
+          
+          ctx.drawImage(video, 0, 0, width, height);
+          
+          try {
+            const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Higher quality
+            
+            if (!thumbnailDataUrl || thumbnailDataUrl === 'data:,' || thumbnailDataUrl.length < 100) {
+              throw new Error('Failed to generate valid thumbnail data');
+            }
+            
+            resolveOnce(thumbnailDataUrl);
+          } catch (canvasError) {
+            // Check if this is a CORS/SecurityError
+            if (canvasError instanceof DOMException && canvasError.name === 'SecurityError') {
+              rejectOnce(new Error(`SecurityError: Failed to extract canvas data due to CORS restrictions. The video may be from a different origin. ${canvasError.message}`));
+            } else {
+              rejectOnce(new Error(`Failed to extract thumbnail data: ${canvasError}`));
+            }
+          }
+        } catch (e) {
+          rejectOnce(new Error(`Failed to capture video frame: ${e}`));
+        }
+      };
+      
+      const onError = (e: any) => {
+        console.error('🎬 [AssetPanel] Video error event:', e);
+        console.error('🎬 [AssetPanel] Video error details:', {
+          error: video.error,
+          networkState: video.networkState,
+          readyState: video.readyState,
+          src: video.src.substring(0, 100) + '...'
+        });
+        rejectOnce(new Error('Failed to load video for thumbnail generation'));
+      };
+      
+      const onAbort = () => {
+        console.warn('🎬 [AssetPanel] Video loading was aborted');
+        rejectOnce(new Error('Video loading was aborted'));
+      };
+      
+      // Add event listeners
+      video.addEventListener('loadedmetadata', onLoadedMetadata);
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onError);
+      video.addEventListener('abort', onAbort);
+      video.addEventListener('canplay', onCanPlay);
+      
+      // Set longer timeout for larger videos
+      timeoutId = setTimeout(() => {
+        rejectOnce(new Error('Timeout: Video took too long to load (30 seconds)'));
+      }, 30000); // Increased to 30 second timeout
+      
+      // Start loading the video
+      try {
+        console.log(`🎬 [AssetPanel] Setting video source...`);
+        video.src = videoUrl;
+      } catch (e) {
+        rejectOnce(new Error(`Failed to set video source: ${e}`));
+      }
     });
   };
 
@@ -204,6 +418,108 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
     console.log("AssetPanel useEffect running...");
     fetchAndSyncAssets();
   }, [fetchAndSyncAssets]);
+
+  // Clear selection when videos change
+  useEffect(() => {
+    setSelectedAssets(new Set());
+    setSelectionOrder([]);
+    setLastSelectedIndex(-1);
+  }, [uploadedVideos]);
+
+  // Handle video selection with multi-select support
+  const handleVideoClick = (video: VideoAsset, index: number, event: React.MouseEvent) => {
+    const videoIndex = uploadedVideos.findIndex(v => v.id === video.id);
+    
+    if (event.metaKey || event.ctrlKey) {
+      // Cmd/Ctrl click - toggle selection
+      const newSelected = new Set(selectedAssets);
+      let newOrder = [...selectionOrder];
+      
+      if (newSelected.has(video.id)) {
+        newSelected.delete(video.id);
+        newOrder = newOrder.filter(id => id !== video.id);
+      } else {
+        newSelected.add(video.id);
+        newOrder.push(video.id); // Add to end of selection order
+      }
+      
+      setSelectedAssets(newSelected);
+      setSelectionOrder(newOrder);
+      setLastSelectedIndex(videoIndex);
+    } else if (event.shiftKey && lastSelectedIndex !== -1) {
+      // Shift click - range selection
+      const newSelected = new Set<string>();
+      const newOrder: string[] = [];
+      const start = Math.min(lastSelectedIndex, videoIndex);
+      const end = Math.max(lastSelectedIndex, videoIndex);
+      
+      for (let i = start; i <= end; i++) {
+        if (uploadedVideos[i]) {
+          newSelected.add(uploadedVideos[i].id);
+          newOrder.push(uploadedVideos[i].id);
+        }
+      }
+      
+      setSelectedAssets(newSelected);
+      setSelectionOrder(newOrder);
+    } else {
+      // Regular click - single selection
+      setSelectedAssets(new Set([video.id]));
+      setSelectionOrder([video.id]);
+      setLastSelectedIndex(videoIndex);
+      onVideoSelect(video);
+    }
+  };
+
+  // Handle drag start with multi-select support
+  const handleDragStart = (e: React.DragEvent, video: VideoAsset) => {
+    // If the dragged video is not selected, select only it
+    if (!selectedAssets.has(video.id)) {
+      setSelectedAssets(new Set([video.id]));
+      setSelectionOrder([video.id]);
+    }
+    
+    // Get selected videos in the order they were selected
+    const selectedVideos = selectionOrder
+      .map(id => uploadedVideos.find(v => v.id === id))
+      .filter((v): v is VideoAsset => v !== undefined);
+    
+    if (selectedVideos.length > 1) {
+      // Multiple assets drag - ordered by selection
+      e.dataTransfer.setData("application/json", JSON.stringify({
+        type: "MULTIPLE_ASSETS",
+        assets: selectedVideos
+      }));
+    } else {
+      // Single asset drag
+      e.dataTransfer.setData("application/json", JSON.stringify(video));
+    }
+    
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return; // Don't interfere with input fields
+      
+      if (e.key === 'a' && (e.metaKey || e.ctrlKey)) {
+        // Cmd/Ctrl + A - select all in upload order
+        e.preventDefault();
+        const allIds = uploadedVideos.map(v => v.id);
+        setSelectedAssets(new Set(allIds));
+        setSelectionOrder(allIds);
+      } else if (e.key === 'Escape') {
+        // Escape - clear selection
+        setSelectedAssets(new Set());
+        setSelectionOrder([]);
+        setLastSelectedIndex(-1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [uploadedVideos]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -405,11 +721,6 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleDragStart = (e: React.DragEvent, video: VideoAsset) => {
-    e.dataTransfer.setData("application/json", JSON.stringify(video));
-    e.dataTransfer.effectAllowed = "copy";
-  };
-
   return (
     <div className="h-full flex flex-col bg-cre8r-gray-800 border-r border-cre8r-gray-700">
       <div className="p-4 border-b border-cre8r-gray-700">
@@ -501,34 +812,82 @@ const AssetPanel = ({ onVideoSelect }: AssetPanelProps) => {
 
         <TabsContent value="uploaded" className="flex-1 overflow-y-auto m-0 p-0">
           <div className="p-3 space-y-3">
+            {/* Selection info header */}
+            {selectedAssets.size > 0 && (
+              <div className="flex items-center justify-between p-2 bg-cre8r-violet/20 rounded-lg border border-cre8r-violet/40">
+                <span className="text-sm text-cre8r-violet font-medium">
+                  {selectedAssets.size} asset{selectedAssets.size > 1 ? 's' : ''} selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedAssets(new Set());
+                    setLastSelectedIndex(-1);
+                  }}
+                  className="text-xs text-cre8r-gray-300 hover:text-white"
+                >
+                  Clear selection
+                </Button>
+              </div>
+            )}
+            
             {uploadedVideos.length === 0 ? (
               <div className="text-center py-8 text-cre8r-gray-400">
                 <p>No uploaded videos yet</p>
               </div>
             ) : (
-              uploadedVideos.map((video) => (
-                <div 
-                  key={video.id} 
-                  className="bg-cre8r-gray-700 rounded-lg overflow-hidden cursor-pointer hover:ring-1 hover:ring-cre8r-violet transition-all group"
-                  onClick={() => onVideoSelect(video)}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, video)}
-                >
-                  <div className="relative">
-                    <img 
-                      src={video.thumbnail} 
-                      alt={video.name} 
-                      className="w-full h-24 object-cover"
-                    />
-                    <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1 rounded">
-                      {formatDuration(video.duration)}
+              uploadedVideos.map((video, index) => {
+                const isSelected = selectedAssets.has(video.id);
+                return (
+                  <div 
+                    key={video.id} 
+                    className={cn(
+                      "bg-cre8r-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all group",
+                      isSelected 
+                        ? "ring-2 ring-cre8r-violet bg-cre8r-violet/10" 
+                        : "hover:ring-1 hover:ring-cre8r-violet"
+                    )}
+                    onClick={(event) => handleVideoClick(video, index, event)}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, video)}
+                  >
+                    <div className="relative">
+                      <img 
+                        src={video.thumbnail} 
+                        alt={video.name} 
+                        className="w-full h-24 object-cover"
+                      />
+                      <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1 rounded">
+                        {formatDuration(video.duration)}
+                      </div>
+                      {/* Selection indicator */}
+                      {isSelected && (
+                        <div className="absolute top-1 left-1 w-5 h-5 bg-cre8r-violet rounded-full flex items-center justify-center">
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        </div>
+                      )}
+                      {/* Multi-select badge */}
+                      {selectedAssets.size > 1 && isSelected && (
+                        <div className="absolute top-1 right-1 bg-cre8r-violet text-white text-xs px-1.5 py-0.5 rounded-full font-medium">
+                          {Array.from(selectedAssets).indexOf(video.id) + 1}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2">
+                      <p className="text-sm truncate">{video.name}</p>
                     </div>
                   </div>
-                  <div className="p-2">
-                    <p className="text-sm truncate">{video.name}</p>
-                  </div>
-                </div>
-              ))
+                );
+              })
+            )}
+            
+            {/* Instructions for multi-select */}
+            {uploadedVideos.length > 1 && selectedAssets.size === 0 && (
+              <div className="text-center p-4 text-xs text-cre8r-gray-500 border-t border-cre8r-gray-700">
+                <p>💡 Tip: Use Cmd/Ctrl+click for multi-select, Shift+click for range selection</p>
+                <p>Drag multiple selected videos to timeline</p>
+              </div>
             )}
           </div>
         </TabsContent>

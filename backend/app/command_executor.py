@@ -10,6 +10,8 @@ from app.executor_handlers.overlay import OverlayOperationHandler
 from app.executor_handlers.fade import FadeOperationHandler
 from app.executor_handlers.group_cut import GroupCutOperationHandler
 from app.executor_handlers.remove import RemoveOperationHandler
+from app.executor_handlers.batch_cut import BatchCutHandler
+from app.executor_handlers.batch_text import BatchTextHandler
 import copy
 import time
 from app.utils import timestamp_to_frames
@@ -119,6 +121,8 @@ class CommandExecutor:
         self.register_handler(OverlayOperationHandler())
         self.register_handler(FadeOperationHandler())
         self.register_handler(RemoveOperationHandler())
+        self.register_handler(BatchCutHandler())
+        self.register_handler(BatchTextHandler())
         # TODO: Register other handlers as they are refactored
 
     def register_handler(self, handler):

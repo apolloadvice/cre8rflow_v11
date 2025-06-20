@@ -13,7 +13,11 @@ import { useToast } from "@/hooks/use-toast";
 import { debounce } from "lodash";
 import { supabase } from "@/integrations/supabase/client";
 
-const EditorContent = () => {
+interface EditorContentProps {
+  isAssetPanelVisible?: boolean;
+}
+
+const EditorContent = ({ isAssetPanelVisible = true }: EditorContentProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   
@@ -28,6 +32,7 @@ const EditorContent = () => {
     setCurrentTime,
     setDuration,
     updateClip,
+    moveClip,
     activeVideoAsset,
     clips,
     setClips,
@@ -35,6 +40,7 @@ const EditorContent = () => {
     setSelectedClipId,
     setActiveVideoAsset,
     setVideoSrc,
+    recalculateDuration,
   } = useEditorStore();
   
   // Use our custom hooks
@@ -72,6 +78,13 @@ const EditorContent = () => {
     };
   }, [setCurrentTime]);
 
+  // Auto-recalculate timeline duration when clips change
+  useEffect(() => {
+    console.log('🎬 [EditorContent] Clips changed, recalculating duration');
+    console.log('🎬 [EditorContent] Current clips:', clips);
+    recalculateDuration();
+  }, [clips, recalculateDuration]);
+
   // Helper to build timeline object for backend
   function buildTimelineObject(clips: any[], frameRate = 30.0) {
     // Group clips by track number
@@ -96,6 +109,29 @@ const EditorContent = () => {
     updateClip(clipId, updates);
     if (activeVideoAsset?.file_path) {
       const timelineObj = buildTimelineObject(clips.map(c => c.id === clipId ? { ...c, ...updates } : c));
+      debouncedSaveTimeline(activeVideoAsset.file_path, timelineObj);
+    }
+  };
+
+  // Handle clip movement within timeline (for reordering)
+  const handleClipMove = (clipId: string, newTrack: number, newStartTime: number) => {
+    console.log('🎬 [EditorContent] handleClipMove called:', clipId, newTrack, newStartTime);
+    
+    const targetClip = clips.find(c => c.id === clipId);
+    if (!targetClip) return;
+    
+    const clipDuration = targetClip.end - targetClip.start;
+    const newEndTime = newStartTime + clipDuration;
+    
+    moveClip(clipId, newTrack, newStartTime, newEndTime);
+    
+    if (activeVideoAsset?.file_path) {
+      const updatedClips = clips.map(c => 
+        c.id === clipId 
+          ? { ...c, track: newTrack, start: newStartTime, end: newEndTime }
+          : c
+      );
+      const timelineObj = buildTimelineObject(updatedClips);
       debouncedSaveTimeline(activeVideoAsset.file_path, timelineObj);
     }
   };
@@ -175,26 +211,28 @@ const EditorContent = () => {
 
   return (
     <div className="flex-1 overflow-hidden bg-cre8r-dark">
-      <ResizablePanelGroup
-        direction="horizontal" 
-        onLayout={handleSidebarResize}
-      >
-        {/* Left sidebar with assets */}
-        <ResizablePanel 
-          defaultSize={layout.sidebar} 
-          minSize={15}
-          className="flex"
+      {/* Use CSS flexbox instead of ResizablePanel for the outer layout to have better control */}
+      <div className="flex h-full min-w-0">
+        {/* Left sidebar with assets - conditionally render but preserve state */}
+        <div 
+          className={`transition-all duration-200 ${
+            isAssetPanelVisible 
+              ? 'w-1/4 min-w-[300px] opacity-100' 
+              : 'w-0 opacity-0 overflow-hidden'
+          }`}
         >
           <AssetPanel 
             onVideoSelect={handleVideoSelect}
           />
-        </ResizablePanel>
+        </div>
         
-        {/* Divider between sidebar and main content */}
-        <ResizableHandle withHandle className="bg-cre8r-gray-700 hover:bg-cre8r-violet transition-colors" />
+        {/* Resizer handle - only show when asset panel is visible */}
+        {isAssetPanelVisible && (
+          <div className="w-1 bg-cre8r-gray-700 hover:bg-cre8r-violet transition-colors cursor-col-resize" />
+        )}
         
         {/* Main content area with nested panel groups */}
-        <ResizablePanel>
+        <div className="flex-1 min-w-0 overflow-hidden">
           <ResizablePanelGroup 
             direction="vertical"
             onLayout={handleTimelineResize}
@@ -260,11 +298,12 @@ const EditorContent = () => {
                 onVideoAssetDrop={handleVideoAssetDrop}
                 onMultipleVideoAssetDrop={handleMultipleVideoAssetDrop}
                 onClipUpdate={handleClipUpdate}
+                onClipMove={handleClipMove}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        </div>
+      </div>
     </div>
   );
 };

@@ -128,86 +128,150 @@ const findBestTrack = (clips: any[], clipType: string, startTime: number, clipDu
 // Utility function to convert backend timeline format to frontend clips
 const convertTimelineToClips = (timeline: any) => {
   console.log("🎬 [Convert Timeline] Input timeline:", timeline);
-  const clips: any[] = [];
   
-  if (!timeline || !timeline.tracks) {
-    console.log("🎬 [Convert Timeline] No tracks found in timeline");
-    return clips;
-  }
-  
-  const frameRate = timeline.frame_rate || 30;
-  console.log("🎬 [Convert Timeline] Frame rate:", frameRate);
-  
-  // First pass: collect all clips from backend timeline
-  const backendClips: any[] = [];
-  
-  timeline.tracks.forEach((track: any, trackIndex: number) => {
-    console.log("🎬 [Convert Timeline] Processing track:", track);
+  try {
+    const clips: any[] = [];
     
-    if (!track.clips || !Array.isArray(track.clips)) {
-      console.log("🎬 [Convert Timeline] Track has no clips:", track);
-      return;
+    if (!timeline) {
+      console.log("🎬 [Convert Timeline] Timeline is null/undefined");
+      return clips;
     }
     
-    track.clips.forEach((clip: any) => {
-      console.log("🎬 [Convert Timeline] Processing clip:", clip);
+    if (!timeline.tracks || !Array.isArray(timeline.tracks)) {
+      console.log("🎬 [Convert Timeline] No tracks found or tracks is not an array:", timeline.tracks);
+      return clips;
+    }
+    
+    const frameRate = timeline.frame_rate || 30;
+    console.log("🎬 [Convert Timeline] Frame rate:", frameRate);
+    
+    // First pass: collect all clips from backend timeline with error handling
+    const backendClips: any[] = [];
+    
+    timeline.tracks.forEach((track: any, trackIndex: number) => {
+      console.log("🎬 [Convert Timeline] Processing track:", track);
       
-      const frontendClip: any = {
-        id: clip.clip_id || clip.id || `clip-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        start: typeof clip.start === 'number' ? clip.start / frameRate : 0,
-        end: typeof clip.end === 'number' ? clip.end / frameRate : 0,
-        originalTrack: trackIndex, // Keep original track for reference
-        type: clip.type || track.track_type || 'video',
-        name: clip.name || 'Unnamed Clip',
-        file_path: clip.file_path,
-      };
-      
-      // Add text-specific properties and fix display names
-      if (clip.type === 'text' || clip.text) {
-        frontendClip.text = clip.text;
-        frontendClip.type = 'text';
-        frontendClip.name = clip.text || 'Text';  // Show actual text content
-      } else if (clip.type === 'overlay' || frontendClip.name.startsWith('Overlay:')) {
-        frontendClip.type = 'overlay';
-        // Simplify overlay names - remove "Overlay:" prefix if present
-        if (frontendClip.name.startsWith('Overlay: ')) {
-          frontendClip.name = frontendClip.name.replace('Overlay: ', '');
-        }
+      if (!track) {
+        console.log("🎬 [Convert Timeline] Track is null/undefined, skipping");
+        return;
       }
       
-      backendClips.push(frontendClip);
+      if (!track.clips || !Array.isArray(track.clips)) {
+        console.log("🎬 [Convert Timeline] Track has no clips or clips is not an array:", track);
+        return;
+      }
+      
+      track.clips.forEach((clip: any, clipIndex: number) => {
+        console.log("🎬 [Convert Timeline] Processing clip:", clip);
+        
+        if (!clip) {
+          console.log("🎬 [Convert Timeline] Clip is null/undefined, skipping");
+          return;
+        }
+        
+        try {
+          // Safe type checking and conversion
+          const startFrames = typeof clip.start === 'number' ? clip.start : 0;
+          const endFrames = typeof clip.end === 'number' ? clip.end : frameRate; // Default 1 second
+          
+          const frontendClip: any = {
+            id: clip.clip_id || clip.id || `clip-${Date.now()}-${trackIndex}-${clipIndex}`,
+            start: startFrames / frameRate,
+            end: endFrames / frameRate,
+            originalTrack: trackIndex,
+            type: clip.type || track.track_type || 'video',
+            name: clip.name || 'Unnamed Clip',
+            file_path: clip.file_path || null,
+          };
+          
+          // Ensure valid duration
+          if (frontendClip.start >= frontendClip.end) {
+            console.warn("🎬 [Convert Timeline] Invalid clip duration, fixing:", frontendClip);
+            frontendClip.end = frontendClip.start + 1; // Minimum 1 second duration
+          }
+          
+          // Add text-specific properties and fix display names
+          if (clip.type === 'text' || clip.text) {
+            frontendClip.text = clip.text || 'Text';
+            frontendClip.type = 'text';
+            frontendClip.name = clip.text || 'Text';
+          } else if (clip.type === 'overlay' || (frontendClip.name && frontendClip.name.startsWith('Overlay:'))) {
+            frontendClip.type = 'overlay';
+            // Simplify overlay names
+            if (frontendClip.name && frontendClip.name.startsWith('Overlay: ')) {
+              frontendClip.name = frontendClip.name.replace('Overlay: ', '');
+            }
+          }
+          
+          backendClips.push(frontendClip);
+          console.log("🎬 [Convert Timeline] Successfully processed clip:", frontendClip);
+        } catch (clipError) {
+          console.error("🎬 [Convert Timeline] Error processing clip:", clip, clipError);
+          // Continue processing other clips instead of failing entirely
+        }
+      });
     });
-  });
-  
-  console.log("🎬 [Convert Timeline] Backend clips collected:", backendClips);
-  
-  // Second pass: re-assign tracks following our rules
-  const finalClips: any[] = [];
-  
-  // Sort clips by start time to process them in chronological order
-  const sortedClips = backendClips.sort((a, b) => a.start - b.start);
-  
-  for (const clip of sortedClips) {
-    const clipDuration = clip.end - clip.start;
     
-    // Use our track assignment logic
-    const { track, startTime } = findBestTrack(finalClips, clip.type, clip.start, clipDuration);
+    console.log("🎬 [Convert Timeline] Backend clips collected:", backendClips);
     
-    const finalClip = {
-      ...clip,
-      track: track,
-      start: startTime, // Use the calculated start time (though it should be the same)
-    };
+    // Second pass: re-assign tracks following our rules
+    const finalClips: any[] = [];
     
-    // Remove the originalTrack property as it's no longer needed
-    delete finalClip.originalTrack;
+    // Sort clips by start time to process them in chronological order
+    const sortedClips = backendClips.sort((a, b) => a.start - b.start);
     
-    finalClips.push(finalClip);
-    console.log("🎬 [Convert Timeline] Assigned clip to track:", finalClip);
+    for (const clip of sortedClips) {
+      try {
+        const clipDuration = clip.end - clip.start;
+        
+        // Use our track assignment logic with error handling
+        let track = 0;
+        let startTime = clip.start;
+        
+        try {
+          const trackAssignment = findBestTrack(finalClips, clip.type, clip.start, clipDuration);
+          track = trackAssignment.track;
+          startTime = trackAssignment.startTime;
+        } catch (trackError) {
+          console.error("🎬 [Convert Timeline] Error in track assignment, using defaults:", trackError);
+          // Use fallback values
+          track = clip.originalTrack || 0;
+          startTime = clip.start;
+        }
+        
+        const finalClip = {
+          ...clip,
+          track: track,
+          start: startTime,
+        };
+        
+        // Remove the originalTrack property as it's no longer needed
+        delete finalClip.originalTrack;
+        
+        finalClips.push(finalClip);
+        console.log("🎬 [Convert Timeline] Assigned clip to track:", finalClip);
+      } catch (clipProcessingError) {
+        console.error("🎬 [Convert Timeline] Error processing clip for track assignment:", clip, clipProcessingError);
+        // Add clip with original track assignment as fallback
+        const fallbackClip = {
+          ...clip,
+          track: clip.originalTrack || 0
+        };
+        delete fallbackClip.originalTrack;
+        finalClips.push(fallbackClip);
+      }
+    }
+    
+    console.log("🎬 [Convert Timeline] Final clips with reassigned tracks:", finalClips);
+    return finalClips;
+    
+  } catch (error) {
+    console.error("🎬 [Convert Timeline] Major error in convertTimelineToClips:", error);
+    console.error("🎬 [Convert Timeline] Timeline object that caused error:", timeline);
+    
+    // Return empty array instead of crashing
+    return [];
   }
-  
-  console.log("🎬 [Convert Timeline] Final clips with reassigned tracks:", finalClips);
-  return finalClips;
 };
 
 export const useAICommands = () => {
@@ -249,24 +313,36 @@ export const useAICommands = () => {
       console.log("🎬 [AI Commands] Backend result:", result);
       console.log("🎬 [AI Commands] Current clips after executeCommand:", useEditorStore.getState().clips);
       
-      if (result) {
-        console.log("🎬 [AI Commands] Result has operations:", !!result.operations);
-        console.log("🎬 [AI Commands] Result has videoUrl:", !!result.videoUrl);
-        console.log("🎬 [AI Commands] Operations array:", result.operations);
-        console.log("🎬 [AI Commands] VideoUrl value:", result.videoUrl);
+      if (!result) {
+        console.error("🎬 [AI Commands] No result returned from executeCommand");
+        throw new Error("No response from backend");
+      }
+      
+      console.log("🎬 [AI Commands] Result has operations:", !!result.operations);
+      console.log("🎬 [AI Commands] Result has videoUrl:", !!result.videoUrl);
+      console.log("🎬 [AI Commands] Result has timeline:", !!result.timeline);
+      console.log("🎬 [AI Commands] Operations array:", result.operations);
+      console.log("🎬 [AI Commands] VideoUrl value:", result.videoUrl);
+      
+      // Get fresh state to check if optimistic edit was applied
+      const currentClips = useEditorStore.getState().clips;
+      const optimisticEditApplied = currentClips.length > initialClipCount;
+      console.log("🎬 [AI Commands] Optimistic edit detected:", optimisticEditApplied);
+      
+      // Handle backend response with timeline data
+      if (result.timeline) {
+        console.log("🎬 [AI Commands] Using timeline response path:", result.timeline);
         
-        // Get fresh state to check if optimistic edit was applied
-        const currentClips = useEditorStore.getState().clips;
-        const optimisticEditApplied = currentClips.length > initialClipCount;
-        console.log("🎬 [AI Commands] Optimistic edit detected:", optimisticEditApplied);
-        
-        // Handle backend response with timeline data
-        if (result.timeline) {
-          console.log("🎬 [AI Commands] Using timeline response path:", result.timeline);
-          
-          // Convert backend timeline to frontend clips
+        try {
+          // Convert backend timeline to frontend clips with error handling
           const timelineClips = convertTimelineToClips(result.timeline);
           console.log("🎬 [AI Commands] Converted timeline clips:", timelineClips);
+          
+          // Validate the converted clips
+          if (!Array.isArray(timelineClips)) {
+            console.error("🎬 [AI Commands] Converted clips is not an array:", timelineClips);
+            throw new Error("Invalid timeline conversion result");
+          }
           
           // Always use the backend timeline as the authoritative source
           // This replaces both the original clips and any optimistic edits
@@ -279,11 +355,24 @@ export const useAICommands = () => {
           });
           
           return result;
-        }
-        // Prioritize operations over processed video for timeline-based editing
-        else if (result.operations && result.operations.length > 0) {
-          console.log("🎬 [AI Commands] Using operations path:", result.operations);
+        } catch (timelineError) {
+          console.error("🎬 [AI Commands] Error processing timeline response:", timelineError);
           
+          // Fall back to showing success message without updating timeline
+          toast({
+            title: "Command processed",
+            description: result.message || "Command executed successfully, but timeline display may not reflect changes",
+            variant: "default"
+          });
+          
+          return result;
+        }
+      }
+      // Prioritize operations over processed video for timeline-based editing
+      else if (result.operations && result.operations.length > 0) {
+        console.log("🎬 [AI Commands] Using operations path:", result.operations);
+        
+        try {
           // If optimistic edit was applied, we should avoid duplicate operations
           if (optimisticEditApplied) {
             console.log("🎬 [AI Commands] Optimistic edit detected - skipping duplicate operations");
@@ -301,12 +390,24 @@ export const useAICommands = () => {
           
           // Don't process videoUrl if we successfully processed operations
           return result;
-        }
-        // Only use processed video if no operations are available
-        else if (result.videoUrl) {
-          console.log("🎬 [AI Commands] Using processed video path:", result.videoUrl);
-          console.log("🎬 [AI Commands] Current clips before handleVideoProcessed:", currentClips);
+        } catch (operationsError) {
+          console.error("🎬 [AI Commands] Error applying operations:", operationsError);
           
+          // Fall back to success message
+          toast({
+            title: "Command processed",
+            description: result.message || "Command executed successfully",
+          });
+          
+          return result;
+        }
+      }
+      // Only use processed video if no operations are available
+      else if (result.videoUrl) {
+        console.log("🎬 [AI Commands] Using processed video path:", result.videoUrl);
+        console.log("🎬 [AI Commands] Current clips before handleVideoProcessed:", currentClips);
+        
+        try {
           // Update the video source with the new processed video
           handleVideoProcessed(result.videoUrl);
           
@@ -316,11 +417,23 @@ export const useAICommands = () => {
           });
           
           return result;
-        }
-        // If backend doesn't return operations, create them locally for simple commands
-        else {
-          console.log("🎬 [AI Commands] Using inference path");
+        } catch (videoError) {
+          console.error("🎬 [AI Commands] Error processing video:", videoError);
           
+          toast({
+            title: "Command processed",
+            description: "Command executed successfully, but video processing failed",
+            variant: "default"
+          });
+          
+          return result;
+        }
+      }
+      // If backend doesn't return operations, create them locally for simple commands
+      else {
+        console.log("🎬 [AI Commands] Using inference path");
+        
+        try {
           // If optimistic edit was applied, we don't need to infer
           if (optimisticEditApplied) {
             console.log("🎬 [AI Commands] Optimistic edit already applied - skipping inference");
@@ -343,19 +456,24 @@ export const useAICommands = () => {
               console.log("🎬 [AI Commands] No operations could be inferred from command");
               toast({
                 title: "Command processed",
-                description: "Command sent to backend successfully",
+                description: result.message || "Command sent to backend successfully",
               });
             }
           }
           
           return result;
+        } catch (inferenceError) {
+          console.error("🎬 [AI Commands] Error in inference path:", inferenceError);
+          
+          toast({
+            title: "Command processed",
+            description: result.message || "Command executed successfully",
+          });
+          
+          return result;
         }
-        
-        return result;
-      } else {
-        console.log("🎬 [AI Commands] No result from backend - executeCommand returned null/undefined");
-        throw new Error("No response from backend");
       }
+      
     } catch (error) {
       console.error("🎬 [AI Commands] Error during executeCommand:", error);
       console.error("🎬 [AI Commands] Error stack:", error instanceof Error ? error.stack : 'No stack');
