@@ -339,6 +339,13 @@ Note: As of 2024-06-13, context awareness for TRIM and CUT is implemented and te
 ## ✅ COMPLETED TASKS
 
 ### 2025-01-30
+- ✅ **Fixed Video Upload File Naming Issues**: Resolved 400 Bad Request errors during video upload caused by special characters in filenames
+  - Added filename sanitization function to backend `upload_api.py`
+  - Sanitizes Unicode characters (including non-breaking spaces U+202F) that cause Supabase Storage upload failures
+  - Normalizes Unicode using NFKC normalization and replaces problematic characters
+  - Maintains safe alphanumeric, punctuation, and common video filename characters
+  - Prevents upload errors for files with Mac-generated special characters in screen recording names
+  - Users can now successfully upload videos with complex filenames like "Screen Recording 2025-06-15 at 2.50.20 PM.mov"
 - ✅ **Fixed Timeline Infinite Render Loop**: Resolved excessive rendering in Timeline component that was causing performance issues and potential crashes
   - Removed `zoom` from `calculateOptimalZoom` dependency array to prevent infinite loops
   - Memoized thumbnail styles to prevent reprocessing on every render

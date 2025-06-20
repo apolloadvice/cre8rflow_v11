@@ -2,6 +2,8 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 import os
+import re
+import unicodedata
 from fastapi.responses import JSONResponse
 from supabase import create_client, Client
 import tempfile
@@ -19,6 +21,36 @@ SUPABASE_BUCKET = "assets"  # Change if your bucket is named differently
 
 def get_supabase_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename for safe storage by:
+    1. Normalizing Unicode characters
+    2. Removing or replacing problematic characters
+    3. Ensuring safe filename for Supabase Storage
+    """
+    # Normalize Unicode characters (NFD decomposition then recomposition)
+    filename = unicodedata.normalize('NFKC', filename)
+    
+    # Replace problematic characters with safe alternatives
+    # Non-breaking spaces and other special spaces -> regular space
+    filename = re.sub(r'[\u00A0\u2000-\u200F\u202F\u205F\u3000]', ' ', filename)
+    
+    # Multiple spaces -> single space
+    filename = re.sub(r'\s+', ' ', filename)
+    
+    # Remove or replace other problematic characters for storage
+    # Keep alphanumeric, basic punctuation, spaces, and common video file chars
+    filename = re.sub(r'[^\w\s\-_\.\(\)]+', '_', filename)
+    
+    # Trim spaces from start/end
+    filename = filename.strip()
+    
+    # Ensure we don't have empty filename
+    if not filename:
+        filename = "video_file"
+    
+    return filename
 
 class UploadUrlRequest(BaseModel):
     filename: str
@@ -59,13 +91,19 @@ async def list_assets(request: Request):
 async def get_upload_url(payload: UploadUrlRequest, request: Request):
     """
     Issue a signed upload URL for direct upload to Supabase Storage.
+    Sanitizes filename to prevent upload errors caused by special characters.
     """
     supabase = get_supabase_client()
+    
+    # Sanitize the filename to prevent special character issues
+    sanitized_filename = sanitize_filename(payload.filename)
+    
     # Compose the storage path
     folder = payload.folder or ""
     if folder and not folder.endswith("/"):
         folder += "/"
-    path = f"{folder}{payload.filename}"
+    path = f"{folder}{sanitized_filename}"
+    
     # Generate signed upload URL (public API does not support signed upload, so we use create_signed_url for download, but for upload, use upload API directly)
     # For direct upload, the frontend can use the Storage API, but for security, you may want to generate a signed policy or use RLS.
     # Here, we return the storage path for the frontend to use with supabase-js.
